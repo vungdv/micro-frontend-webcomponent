@@ -14,8 +14,11 @@ At the end of M1, the host must:
 4. **Mount exactly one app at a time.** Create the custom element in the outlet, and remove the previous one on route change.
 5. **Contain failures.** A remote that is down, slow, or broken affects only its own route: an error panel with Retry replaces it, and the header and other routes keep working.
 6. **Accept navigation requests from apps.** An app asks to navigate with the `mf:navigate` event; the host decides whether to act on it.
+7. **Be specified by scenarios.** Every behaviour above has a scenario and a test (§3).
 
-Out of scope for M1: auth (M2), Vue and Lit apps (M3, M4), production layout and deployment (M5), theming (M6). The remotes in M1 are vanilla placeholder elements.
+Cross-cutting spec: [03.testing.md](../specs/03.testing.md).
+
+Out of scope for M1: auth (M2), Vue and Lit apps (M3, M4), production layout and deployment (M5), theming (M6), observability ([02.observability.md](../specs/02.observability.md)). The remotes in M1 are vanilla placeholder elements.
 
 ## 2. Architecture
 
@@ -202,3 +205,79 @@ sequenceDiagram
     Note over M: log.warn, state unchanged
   end
 ```
+
+## 3. Testing
+
+Applies [03.testing.md](../specs/03.testing.md) with no deviations. The `OBS-*` scenarios do not apply, because M1 has no telemetry.
+
+### 3.1 Test levels
+
+| Level | Units | File |
+|---|---|---|
+| Pure rules | `start`, `transition`, `parseConfig` | `transition.test.ts`, `config-loader.test.ts` |
+| Orchestration | `HostMediator` | `host-mediator.test.ts` |
+| Unit / colleague | `ConfigLoader`, `Router`, `ModuleLoader`, `Outlet`, `Header`, `Logger` | `<unit>.test.ts` |
+| Composition | `wire()` | `main.test.ts` |
+| Contract | `mf:navigate` | `shared-contracts/test/navigate.test.ts` |
+
+### 3.2 Scenario catalogue
+
+#### Boot and manifest
+
+| Id | Given | When | Then |
+|---|---|---|---|
+| BT-01 | the host has not started | `start()` | state `booting`, command `config.load` |
+| BT-02 | `booting` without config | `configLoaded` | config stored, `header.render` then `router.start` |
+| BT-03 | `booting` | `configFailed("HTTP 404")` | `fatalError`, global retryable error panel, error logged |
+| BT-04 | `fatalError` | global Retry | `booting` with config cleared, `config.load` |
+| BT-05 | `booting` with config already loaded | a second `configLoaded` | ignored with a warning |
+| BT-06 | the mediator has already started | `start()` again | warning, no commands |
+| CF-01 | a manifest with two valid apps | `ConfigLoader.load()` | `configLoaded` with URLs resolved against the manifest URL |
+| CF-02 | the server answers 404 / invalid JSON / network error | `load()` | `configFailed` with a message that names the cause |
+| CF-03 | a manifest with a duplicate route, duplicate tag, reserved tag, tag without a hyphen, or a non-http URL | `load()` | `configFailed` naming the offending `apps.<name>` field (one scenario per rule) |
+
+#### Routing
+
+| Id | Given | When | Then |
+|---|---|---|---|
+| TR-01 | config loaded, any routed state | `routeChanged("#/")` | `home`, `header.setActive(null)`, `outlet.showHome` |
+| TR-02 | config loaded, any routed state | `routeChanged("#/nope", null)` | `notFound`, `outlet.showNotFound("#/nope")` |
+| TR-03 | config loaded, any routed state | `routeChanged("#/todo", todo)` | `loadingApp` with activation id + 1, `setActive(todo)`, `showLoading`, `loader.load(retry=false)` |
+| TR-04 | `fatalError` or no config | `routeChanged` | ignored with a warning |
+| RT-01 | the hash is `#/todo` | `router.start(apps)` | `routeChanged("#/todo", todo)` is reported right away |
+| RT-02 | the router has started | the hash changes | exactly one `routeChanged` per change |
+
+#### Loading, mounting, failure
+
+| Id | Given | When | Then |
+|---|---|---|---|
+| TR-05 | `loadingApp(id=n)` | `appLoaded(n)` | `appActive`, `outlet.mount(entry)` |
+| TR-06 | `loadingApp(id=n)` | `appFailed(n)` | `appError`, route retryable error naming the app, error logged |
+| TR-07 | `appError` | route Retry | `loadingApp(id=n+1)`, `loader.load(retry=true)`, header not updated again |
+| TR-08 | any state other than `appError` / `fatalError` | Retry | ignored with a warning |
+| TR-09 | `loadingApp(id=2)` | `appLoaded(1)` or `appFailed(1)` | state unchanged, stale warning, nothing mounted |
+| ML-01 | the tag is already defined | `load()` | `appLoaded` without calling the importer |
+| ML-02 | the importer resolves and the tag gets defined | `load()` | `appLoaded` with the same activation id |
+| ML-03 | the importer rejects | `load()` | `appFailed` with the import error |
+| ML-04 | the importer never settles | the timeout elapses (fake timers) | `appFailed` with "timed out after … ms" |
+| ML-05 | an earlier import of this URL failed | `load()` again (retry or not) | the importer gets the URL with an `mf-retry=<k>` query |
+| ML-06 | `notify` throws on `appLoaded` | `load()` | no `appFailed` follows for the same id |
+| OU-01 | an app is mounted | `showLoading` / `showHome` / `showError` / `mount(other)` | the previous element is removed; at most one app element is in the outlet |
+| OU-02 | an error panel with Retry is shown | the user clicks Retry | `retryRequested(scope)` is sent |
+| MD-01 | a colleague throws while running a command | the mediator runs it | `command failed` is logged, the other commands still run |
+| MD-02 | a command synchronously triggers a notification | the mediator is running commands | the notification is processed only after the current event finishes (run-to-completion) |
+
+#### Navigation requests
+
+| Id | Given | When | Then |
+|---|---|---|---|
+| NV-01 | config loaded | `navigateRequested("#/weather")` (declared route) or `"#/"` | `router.navigate(path)` |
+| NV-02 | config loaded | `navigateRequested("#/unknown")` | warning `navigate request rejected`, state unchanged |
+| NV-03 | no config yet | `navigateRequested` | ignored with a warning |
+| NV-04 | the host is wired | `mf:navigate` with no string `detail.path` | warning `malformed mf:navigate ignored`, no notification |
+| E2E-01 | `wire()` with two fake remotes | the user clicks Todo, then Weather | each element is defined once and only one is mounted at a time |
+| E2E-02 | the weather import fails | the user opens Weather, then Todo | Weather shows a route error panel; Todo mounts; the header keeps working |
+
+### 3.3 Migrating the existing tests
+
+The current suites use transition-style names (e.g. `configLoaded → booting / …`). Restructure them to match the catalogue above. Scope of the definition of done: `@mf/host` and `@mf/shared-contracts`.

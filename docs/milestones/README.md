@@ -2,6 +2,8 @@
 
 This folder breaks down the milestones in [01.init-spec.md](../specs/01.init-spec.md#milestones). There is one file per milestone. Each file is written once the milestone is next in line, so it can take into account what the previous milestones actually delivered.
 
+Every milestone applies the cross-cutting spec [03.testing.md](../specs/03.testing.md) and lists only its own scenario catalogue. [02.observability.md](../specs/02.observability.md) applies from the milestone that first adopts it; M1 does not.
+
 | # | Milestone | Detail design | Depends on | Status |
 |---|---|---|---|---|
 | M1 | Host shell, manifest, routing, placeholder apps | [m1-host-shell.md](m1-host-shell.md) | none | Implemented |
