@@ -1,111 +1,271 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { requestNavigate } from '@mf/shared-contracts';
-import { wire } from '../src/main';
-
 /**
- * End-to-end wiring test: real colleagues + mediator, the real mf:navigate contract,
- * and an injected importer standing in for the remote dev servers.
+ * Composition level (docs/milestones/m1-host-shell.md §3.1): `wire()` in happy-dom with real
+ * colleagues, the real `mf:navigate` contract, and network-level fakes only (`fetch`, `importer`).
+ *
+ * `wire()` uses the real `customElements` registry and window `hashchange`, and cannot be unwired,
+ * so the host is wired once for the file and each `describe` below is a deliberate, ordered step of
+ * one user journey (`beforeAll`), carrying state from the step before.
+ * Tags are unique to this file (`e2e-*`) because definitions outlive a test.
  */
-const TODO_URL = 'http://localhost:5175/src/todo-app.ts';
-const WEATHER_URL = 'http://localhost:5176/src/weather-app.ts';
-const manifest = {
-  apps: {
-    todo: { route: '#/todo', url: TODO_URL, tag: 'wired-todo' },
-    weather: { route: '#/weather', url: WEATHER_URL, tag: 'wired-weather' },
-  },
-};
+import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { MF_NAVIGATE, requestNavigate } from '@mf/shared-contracts';
+import { wire } from '../src/main';
+import { aManifest, anApp } from './support/builders';
+import { json, recordingFetch, scriptedImporter } from './support/fakes';
 
-let todoUp = false;
-const importedUrls: string[] = [];
-const importer = async (url: string): Promise<void> => {
-  importedUrls.push(url);
-  if (url.startsWith(WEATHER_URL)) {
-    customElements.define('wired-weather', class extends HTMLElement {});
-  } else if (todoUp) {
-    customElements.define('wired-todo', class extends HTMLElement {});
-  } else {
-    throw new TypeError('Failed to fetch dynamically imported module');
-  }
-};
+const todo = anApp('todo', { tag: 'e2e-todo' });
+const weather = anApp('weather', { tag: 'e2e-weather' });
+/** A third remote, used for the failure scenarios so that Todo and Weather stay healthy. */
+const news = anApp('news', { tag: 'e2e-news' });
 
-const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(manifest)));
-let fetchedUrls: string[] = [];
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-const outlet = () => document.getElementById('mf-outlet')!;
-const navLinks = () => document.querySelectorAll('#mf-header nav a');
-const go = async (hash: string) => {
-  window.location.hash = hash;
+const fetchFake = recordingFetch(json(aManifest(todo, weather, news)));
+const importer = scriptedImporter(customElements, {
+  [todo.url]: { define: todo.tag },
+  [weather.url]: { define: weather.tag },
+  [news.url]: { reject: 'could not reach news' },
+});
+
+/** Lets fetch, imports and hashchange settle (no real waits beyond zero-delay tasks). */
+const settle = async (): Promise<void> => {
+  for (let i = 0; i < 3; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+};
+const outlet = (): HTMLElement => document.getElementById('mf-outlet')!;
+const navLinks = (): HTMLAnchorElement[] => [...document.querySelectorAll<HTMLAnchorElement>('#mf-header nav a')];
+const activeHref = (): string | null | undefined =>
+  document.querySelector('#mf-header [aria-current="page"]')?.getAttribute('href');
+const appElements = (): string[] =>
+  [...outlet().children].map((el) => el.localName).filter((tag) => tag.startsWith('e2e-'));
+const importsOf = (url: string): string[] => importer.urls.filter((u) => u.startsWith(url));
+
+/** The user clicks the header link of an app (a plain `<a href>`: the browser changes the hash). */
+const clickNav = async (route: string): Promise<void> => {
+  navLinks().find((a) => a.getAttribute('href') === route)!.click();
   await settle();
 };
 
-describe('host wiring (main.ts)', () => {
+let warn: MockInstance<typeof console.warn>;
+let info: MockInstance<typeof console.info>;
+type LogLine = Record<string, unknown>;
+const parse = (spy: MockInstance<(...args: unknown[]) => void>): LogLine[] =>
+  spy.mock.calls.map(([line]) => JSON.parse(String(line)) as LogLine);
+
+/** Runs one user step and returns the JSON log lines it wrote to `console.warn` / `console.info`. */
+const step = async (action: () => void | Promise<void>): Promise<{ warnings: LogLine[]; infos: LogLine[] }> => {
+  warn.mockClear();
+  info.mockClear();
+  await action();
+  await settle();
+  return { warnings: parse(warn), infos: parse(info) };
+};
+
+describe('Given the host is wired with three fake remotes (Todo, Weather, and News which is down)', () => {
   beforeAll(async () => {
-    vi.spyOn(console, 'info').mockImplementation(() => {});
+    info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('fetch', fetchFake);
     window.location.hash = '';
     document.body.innerHTML = '<header id="mf-header"></header><main id="mf-outlet"></main>';
     wire({ importer, timeoutMs: 1000 }).start();
     await settle();
-    fetchedUrls = fetchMock.mock.calls.map(([input]) => String(input));
-  });
-  afterAll(() => vi.unstubAllGlobals());
-
-  it('boots from the manifest into the home view with header links', () => {
-    expect(fetchedUrls).toEqual([expect.stringMatching(/\/host\.config\.json$/)]);
-    expect([...navLinks()].map((a) => a.getAttribute('href'))).toEqual(['#/todo', '#/weather']);
-    expect(outlet().querySelector('.mf-panel--home')).not.toBeNull();
   });
 
-  it('mf:navigate to a declared route mounts that app and highlights it', async () => {
-    requestNavigate('#/weather');
-    await settle();
-    expect(window.location.hash).toBe('#/weather');
-    expect(outlet().querySelector('wired-weather')).not.toBeNull();
-    expect(document.querySelector('#mf-header [aria-current="page"]')?.getAttribute('href')).toBe('#/weather');
+  afterAll(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    window.location.hash = '';
   });
 
-  it('mf:navigate to an unknown path is rejected with a warning and nothing changes', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    requestNavigate('#/elsewhere');
-    await settle();
-    expect(window.location.hash).toBe('#/weather');
-    expect(outlet().querySelector('wired-weather')).not.toBeNull();
-    const record = JSON.parse(String(warn.mock.calls.at(-1)?.[0]));
-    expect(record).toMatchObject({ level: 'warn', component: 'host', msg: 'navigate request rejected: unknown path', path: '#/elsewhere' });
+  describe('when the host starts', () => {
+    it('then the manifest is fetched once from host.config.json next to the document [E2E-03]', () => {
+      expect(fetchFake.urls).toEqual([new URL('host.config.json', document.baseURI).href]);
+    });
+
+    it('then the header shows one link per app [E2E-03]', () => {
+      expect(navLinks().map((a) => a.getAttribute('href'))).toEqual(['#/todo', '#/weather', '#/news']);
+    });
+
+    it('then the outlet shows the home view [E2E-03]', () => {
+      expect(outlet().querySelector('.mf-panel--home')).not.toBeNull();
+    });
   });
 
-  it('goal 5: a down remote fails only its route; other routes work; Retry mounts it once it is back', async () => {
-    // Remote is down: route-scoped error panel, header intact.
-    await go('#/todo');
-    const panel = outlet().querySelector<HTMLElement>('[role="alert"]');
-    expect(panel?.dataset.scope).toBe('route');
-    expect(panel?.textContent).toContain('Could not load todo');
-    expect(outlet().querySelector('wired-weather')).toBeNull();
-    expect(navLinks()).toHaveLength(2);
-    expect(document.querySelector('#mf-header [aria-current="page"]')?.getAttribute('href')).toBe('#/todo');
+  describe('when the user clicks Todo, then Weather, then Todo again', () => {
+    const mounted: string[][] = [];
+    beforeAll(async () => {
+      for (const route of [todo.route, weather.route, todo.route]) {
+        await clickNav(route);
+        mounted.push(appElements());
+      }
+    });
 
-    // Another route still mounts.
-    await go('#/weather');
-    expect(outlet().querySelector('wired-weather')).not.toBeNull();
+    it('then each visit shows exactly that one app in the outlet [E2E-01]', () => {
+      expect(mounted).toEqual([[todo.tag], [weather.tag], [todo.tag]]);
+    });
 
-    // Back to the failed route: still down, and the later attempt bypasses the cached failure.
-    await go('#/todo');
-    expect(outlet().querySelector('[data-scope="route"]')).not.toBeNull();
-    expect(importedUrls.filter((u) => u.startsWith(TODO_URL))).toEqual([TODO_URL, `${TODO_URL}?mf-retry=1`]);
+    it('then the outlet holds a single element [E2E-01]', () => {
+      expect(outlet().children).toHaveLength(1);
+    });
 
-    // Remote comes back: Retry mounts the app.
-    todoUp = true;
-    outlet().querySelector('button')!.click();
-    await settle();
-    expect(outlet().querySelector('wired-todo')).not.toBeNull();
-    expect(outlet().children).toHaveLength(1);
-    expect(importedUrls.at(-1)).toBe(`${TODO_URL}?mf-retry=2`);
+    it('then each remote is imported once, and the revisit reuses the defined element [E2E-01]', () => {
+      expect(importsOf(todo.url)).toEqual([todo.url]);
+      expect(importsOf(weather.url)).toEqual([weather.url]);
+    });
+
+    it('then both elements are defined in the registry [E2E-01]', () => {
+      expect(customElements.get(todo.tag)).toBeDefined();
+      expect(customElements.get(weather.tag)).toBeDefined();
+    });
   });
 
-  it('an unknown hash shows not-found while the header stays', async () => {
-    await go('#/missing');
-    expect(outlet().querySelector('.mf-panel--not-found')).not.toBeNull();
-    expect(navLinks()).toHaveLength(2);
+  describe('when the Todo app dispatches mf:navigate to a declared route (#/weather)', () => {
+    beforeAll(async () => {
+      requestNavigate(weather.route);
+      await settle();
+    });
+
+    it('then the hash changes to that route [E2E-04] [NV-01]', () => {
+      expect(window.location.hash).toBe(weather.route);
+    });
+
+    it('then that app is mounted [E2E-04]', () => {
+      expect(appElements()).toEqual([weather.tag]);
+    });
+
+    it('then its header link is highlighted [E2E-04]', () => {
+      expect(activeHref()).toBe(weather.route);
+    });
+  });
+
+  describe('when an app dispatches mf:navigate to an unknown path', () => {
+    let logged: Awaited<ReturnType<typeof step>>;
+    beforeAll(async () => {
+      logged = await step(() => requestNavigate('#/elsewhere'));
+    });
+
+    it('then the request is rejected with a warning [NV-02]', () => {
+      expect(logged.warnings).toEqual([
+        expect.objectContaining({
+          level: 'warn',
+          component: 'host',
+          msg: 'navigate request rejected: unknown path',
+          path: '#/elsewhere',
+        }),
+      ]);
+    });
+
+    it('then the route and the mounted app are unchanged [NV-02]', () => {
+      expect(window.location.hash).toBe(weather.route);
+      expect(appElements()).toEqual([weather.tag]);
+    });
+  });
+
+  describe.each([
+    ['a non-string detail.path', { path: 42 }],
+    ['no detail', null],
+  ])('when an app dispatches mf:navigate with %s', (_label, detail) => {
+    let logged: Awaited<ReturnType<typeof step>>;
+    beforeAll(async () => {
+      logged = await step(() => {
+        window.dispatchEvent(new CustomEvent(MF_NAVIGATE, { detail, bubbles: true, composed: true }));
+      });
+    });
+
+    it('then the only warning is "malformed mf:navigate ignored" with the detail [NV-04]', () => {
+      expect(logged.warnings).toEqual([
+        expect.objectContaining({ level: 'warn', component: 'host', msg: 'malformed mf:navigate ignored', detail }),
+      ]);
+    });
+
+    it('then no notification reaches the mediator: no state change, route and app unchanged [NV-04]', () => {
+      expect(logged.infos).toEqual([]);
+      expect(window.location.hash).toBe(weather.route);
+      expect(appElements()).toEqual([weather.tag]);
+    });
+  });
+
+  describe('when the user opens News while its remote is down', () => {
+    beforeAll(async () => {
+      await clickNav(news.route);
+    });
+
+    it('then the outlet shows a route error panel naming the app, with Retry [E2E-02]', () => {
+      const panel = outlet().querySelector<HTMLElement>('[role="alert"]');
+      expect(panel?.dataset.scope).toBe('route');
+      expect(panel?.textContent).toContain('Could not load news: could not reach news');
+      expect(panel?.querySelector('button')?.textContent).toBe('Retry');
+    });
+
+    it('then no app element is in the outlet [E2E-02]', () => {
+      expect(appElements()).toEqual([]);
+    });
+
+    it('then the header keeps its links and highlights News [E2E-02]', () => {
+      expect(navLinks()).toHaveLength(3);
+      expect(activeHref()).toBe(news.route);
+    });
+  });
+
+  describe('when the user then opens Todo', () => {
+    beforeAll(async () => {
+      await clickNav(todo.route);
+    });
+
+    it('then Todo mounts [E2E-02]', () => {
+      expect(appElements()).toEqual([todo.tag]);
+    });
+
+    it('then the header still works and highlights Todo [E2E-02]', () => {
+      expect(navLinks()).toHaveLength(3);
+      expect(activeHref()).toBe(todo.route);
+    });
+  });
+
+  describe('when the user goes back to News, which is still down', () => {
+    beforeAll(async () => {
+      await clickNav(news.route);
+    });
+
+    it('then the route error panel is shown again [E2E-06]', () => {
+      expect(outlet().querySelector('[data-scope="route"]')).not.toBeNull();
+    });
+
+    it('then the second import bypasses the cached failure with mf-retry [E2E-06]', () => {
+      expect(importsOf(news.url)).toEqual([news.url, `${news.url}?mf-retry=1`]);
+    });
+  });
+
+  describe('when the News remote is back and the user clicks Retry', () => {
+    beforeAll(async () => {
+      importer.script(news.url, { define: news.tag });
+      outlet().querySelector('button')!.click();
+      await settle();
+    });
+
+    it('then the module is imported again with a new mf-retry [E2E-06]', () => {
+      expect(importsOf(news.url).at(-1)).toBe(`${news.url}?mf-retry=2`);
+    });
+
+    it('then News mounts as the only element in the outlet [E2E-06]', () => {
+      expect(appElements()).toEqual([news.tag]);
+      expect(outlet().children).toHaveLength(1);
+    });
+  });
+
+  describe('when the hash names no app', () => {
+    beforeAll(async () => {
+      window.location.hash = '#/missing';
+      await settle();
+    });
+
+    it('then the not-found view is shown [E2E-05]', () => {
+      expect(outlet().querySelector('.mf-panel--not-found')?.textContent).toContain('#/missing');
+    });
+
+    it('then no app element remains and the header stays [E2E-05]', () => {
+      expect(appElements()).toEqual([]);
+      expect(navLinks()).toHaveLength(3);
+      expect(activeHref()).toBeUndefined();
+    });
   });
 });

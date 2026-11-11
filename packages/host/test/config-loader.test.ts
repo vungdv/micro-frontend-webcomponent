@@ -1,108 +1,104 @@
-import { describe, expect, it, vi } from 'vitest';
-import { ConfigLoader, parseConfig } from '../src/config-loader';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ConfigLoader } from '../src/config-loader';
 import type { HostEvent } from '../src/types';
+import { aManifest, anApp } from './support/builders';
+import { json, recordingFetch, recordingNotify } from './support/fakes';
 
 const MANIFEST_URL = 'https://host.example/app/host.config.json';
-const valid = {
-  apps: {
-    todo: { route: '#/todo', url: './remotes/todo/todo-app.js', tag: 'todo-app' },
-    weather: { route: '#/weather', url: 'http://localhost:5176/src/weather-app.ts', tag: 'weather-dashboard' },
-  },
-};
 
-function load(fetchImpl: typeof fetch): Promise<HostEvent> {
-  return new Promise((resolve) => {
-    new ConfigLoader({ url: MANIFEST_URL, notify: resolve, fetch: fetchImpl }).load();
-  });
+/** Runs `ConfigLoader.load()` against `fetchFn` and resolves with the single notification it sends. */
+async function load(fetchFn?: typeof fetch): Promise<{ event: HostEvent; events: HostEvent[] }> {
+  const recorder = recordingNotify();
+  const next = recorder.next();
+  new ConfigLoader({ url: MANIFEST_URL, notify: recorder.notify, fetch: fetchFn }).load();
+  return { event: await next, events: recorder.events };
 }
 
-const respond = (body: string, status = 200) => vi.fn(async () => new Response(body, { status })) as unknown as typeof fetch;
+/** The message of a `configFailed`, or a failure if the event is anything else. */
+function failure(event: HostEvent): string {
+  if (event.type !== 'configFailed') throw new Error(`expected configFailed, got ${event.type}`);
+  return event.error.message;
+}
 
-describe('ConfigLoader', () => {
-  it('reports configLoaded with entries and URLs resolved against the manifest URL', async () => {
-    const fetchImpl = respond(JSON.stringify(valid));
-    const event = await load(fetchImpl);
-    expect(fetchImpl).toHaveBeenCalledWith(MANIFEST_URL, expect.anything());
-    expect(event).toEqual({
-      type: 'configLoaded',
-      config: {
-        apps: [
-          { name: 'todo', route: '#/todo', url: 'https://host.example/app/remotes/todo/todo-app.js', tag: 'todo-app' },
-          { name: 'weather', route: '#/weather', url: 'http://localhost:5176/src/weather-app.ts', tag: 'weather-dashboard' },
-        ],
-      },
+/** A `fetch` that rejects with `value` (which need not be an Error). */
+function rejectingFetch(value: unknown): typeof fetch {
+  return (async () => {
+    throw value;
+  }) as unknown as typeof fetch;
+}
+
+const todoEntry = aManifest(anApp('todo')).apps.todo;
+/** A raw manifest whose `todo` entry has `patch` applied. */
+const withTodo = (patch: Record<string, unknown>) => ({ apps: { todo: { ...todoEntry, ...patch } } });
+/** A raw manifest with the valid `todo` and `weather` entries plus `extra`. */
+const withExtra = (extra: Record<string, unknown>) => ({ apps: { ...aManifest().apps, ...extra } });
+
+describe('Given a manifest with two valid apps, one with a relative URL', () => {
+  const todo = anApp('todo', { url: './remotes/todo/todo-app.js' });
+  const weather = anApp('weather');
+  let fetchFn: ReturnType<typeof recordingFetch>;
+
+  beforeEach(() => {
+    fetchFn = recordingFetch(json(aManifest(todo, weather)));
+  });
+
+  describe('when ConfigLoader.load() runs', () => {
+    let result: Awaited<ReturnType<typeof load>>;
+    beforeEach(async () => {
+      result = await load(fetchFn);
+    });
+
+    it('then the manifest URL is fetched [CF-01]', () => {
+      expect(fetchFn.urls).toEqual([MANIFEST_URL]);
+    });
+
+    it('then configLoaded is sent once, with URLs resolved against the manifest URL [CF-01]', () => {
+      expect(result.events).toHaveLength(1);
+      expect(result.event).toEqual({
+        type: 'configLoaded',
+        config: {
+          apps: [{ ...todo, url: 'https://host.example/app/remotes/todo/todo-app.js' }, weather],
+        },
+      });
     });
   });
 
-  it('reports configFailed on a network failure', async () => {
-    const event = await load((async () => {
-      throw new TypeError('Failed to fetch');
-    }) as unknown as typeof fetch);
-    expect(event.type).toBe('configFailed');
-    expect(event.type === 'configFailed' && event.error.message).toBe('Failed to fetch');
-  });
+  describe('when no fetch is injected and load() runs', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
 
-  it('reports configFailed on a non-OK HTTP status', async () => {
-    const event = await load(respond('not found', 404));
-    expect(event.type === 'configFailed' && event.error.message).toMatch(/HTTP 404/);
-  });
-
-  it('reports configFailed on invalid JSON', async () => {
-    const event = await load(respond('{ not json'));
-    expect(event.type === 'configFailed' && event.error.message).toMatch(/not valid JSON/);
-  });
-
-  it('reports configFailed on an invalid manifest', async () => {
-    const event = await load(respond(JSON.stringify({ apps: { todo: { ...valid.apps.todo, tag: 'todo' } } })));
-    expect(event.type === 'configFailed' && event.error.message).toMatch(/hyphen/);
+    it('then the global fetch is used and configLoaded is sent [CF-01]', async () => {
+      vi.stubGlobal('fetch', fetchFn);
+      const { event } = await load();
+      expect(fetchFn.urls).toEqual([MANIFEST_URL]);
+      expect(event.type).toBe('configLoaded');
+    });
   });
 });
 
-describe('parseConfig', () => {
-  const withApps = (apps: Record<string, unknown>) => () => parseConfig({ apps }, MANIFEST_URL);
+describe.each<[string, () => typeof fetch, RegExp]>([
+  ['the server answers 404', () => recordingFetch({ status: 404, body: 'not found' }), /^HTTP 404 fetching https:\/\/host\.example\/app\/host\.config\.json$/],
+  ['the server answers invalid JSON', () => recordingFetch({ body: '{ not json' }), /host\.config\.json is not valid JSON$/],
+  ['the network fails', () => recordingFetch({ networkError: 'Failed to fetch' }), /^Failed to fetch$/],
+])('Given %s', (_label, fetchFn, cause) => {
+  describe('when load() runs', () => {
+    let result: Awaited<ReturnType<typeof load>>;
+    beforeEach(async () => {
+      result = await load(fetchFn());
+    });
 
-  it('rejects a manifest without apps', () => {
-    expect(() => parseConfig({}, MANIFEST_URL)).toThrow(/apps/);
-    expect(() => parseConfig(null, MANIFEST_URL)).toThrow(/apps/);
-    expect(() => parseConfig({ apps: [] }, MANIFEST_URL)).toThrow(/apps/);
+    it('then configFailed is sent once, with a message naming the cause [CF-02]', () => {
+      expect(result.events).toHaveLength(1);
+      expect(failure(result.event)).toMatch(cause);
+    });
   });
+});
 
-  it('rejects duplicate routes', () => {
-    expect(withApps({ ...valid.apps, other: { route: '#/todo', url: 'x.js', tag: 'other-app' } })).toThrow(
-      /duplicate route "#\/todo"/,
-    );
-  });
-
-  it('rejects duplicate tags', () => {
-    expect(withApps({ ...valid.apps, other: { route: '#/other', url: 'x.js', tag: 'todo-app' } })).toThrow(
-      /duplicate tag "todo-app"/,
-    );
-  });
-
-  it.each(['todo', '/todo', '#todo', '#/', 42])('rejects route %j', (route) => {
-    expect(withApps({ todo: { ...valid.apps.todo, route } })).toThrow(/route/);
-  });
-
-  it.each(['todo', 'TodoApp', 'Todo-App', '-todo', '', 7])('rejects tag %j', (tag) => {
-    expect(withApps({ todo: { ...valid.apps.todo, tag } })).toThrow(/tag/);
-  });
-
-  it.each(['', '   ', undefined])('rejects url %j', (url) => {
-    expect(withApps({ todo: { ...valid.apps.todo, url } })).toThrow(/url/);
-  });
-
-  it('rejects a non-object entry', () => {
-    expect(withApps({ todo: 'todo-app' })).toThrow(/apps.todo/);
-  });
-
-  it.each(['javascript:alert(1)', 'data:text/javascript,export{}', 'file:///etc/passwd', 'blob:https://x/1'])(
-    'rejects url %j whose protocol is not http(s)',
-    (url) => {
-      expect(withApps({ todo: { ...valid.apps.todo, url } })).toThrow(/http: or https:/);
-    },
-  );
-
-  it.each([
+describe.each<[string, unknown, RegExp]>([
+  ['a duplicate route', withExtra({ other: { route: '#/todo', url: 'x.js', tag: 'other-app' } }), /duplicate route "#\/todo" \(apps\.other\)/],
+  ['a duplicate tag', withExtra({ other: { route: '#/other', url: 'x.js', tag: 'todo-app' } }), /duplicate tag "todo-app" \(apps\.other\)/],
+  ...[
     'annotation-xml',
     'color-profile',
     'font-face',
@@ -111,15 +107,78 @@ describe('parseConfig', () => {
     'font-face-format',
     'font-face-name',
     'missing-glyph',
-  ])('rejects reserved tag %s', (tag) => {
-    expect(withApps({ todo: { ...valid.apps.todo, tag } })).toThrow(/reserved/);
-  });
+  ].map((tag): [string, unknown, RegExp] => [`the reserved tag ${tag}`, withTodo({ tag }), /apps\.todo\.tag ".*" is a reserved element name/]),
+  ...['todo', 'TodoApp', 'Todo-App', '-todo', '', 7].map((tag): [string, unknown, RegExp] => [
+    `the tag ${JSON.stringify(tag)} (not a lowercase name with a hyphen)`,
+    withTodo({ tag }),
+    /apps\.todo\.tag must be a lowercase custom element name containing a hyphen/,
+  ]),
+  ...['javascript:alert(1)', 'data:text/javascript,export{}', 'file:///etc/passwd', 'blob:https://x/1'].map(
+    (url): [string, unknown, RegExp] => [`the non-http URL ${url}`, withTodo({ url }), /apps\.todo\.url must use http: or https:/],
+  ),
+])('Given a manifest with %s', (_label, manifest, offending) => {
+  describe('when load() runs', () => {
+    let event: HostEvent;
+    beforeEach(async () => {
+      ({ event } = await load(recordingFetch(json(manifest))));
+    });
 
-  it.each(['', '  '])('rejects empty app name %j', (name) => {
-    expect(withApps({ [name]: valid.apps.todo })).toThrow(/app names/);
+    it('then configFailed names the offending apps.<name> field [CF-03]', () => {
+      expect(failure(event)).toMatch(offending);
+    });
   });
+});
 
-  it.each(['#/to do', '#/todo ', '#/\ttodo', '#/todo\n'])('rejects route %j containing whitespace', (route) => {
-    expect(withApps({ todo: { ...valid.apps.todo, route } })).toThrow(/whitespace/);
+describe.each<[string, unknown, RegExp]>([
+  ['no apps key', {}, /manifest must have an "apps" object/],
+  ['a null body', null, /manifest must have an "apps" object/],
+  ['apps as an array', { apps: [] }, /manifest must have an "apps" object/],
+  ['a non-object entry', { apps: { todo: 'todo-app' } }, /apps\.todo must be an object/],
+  ...['', '  '].map((name): [string, unknown, RegExp] => [
+    `the empty app name ${JSON.stringify(name)}`,
+    { apps: { [name]: todoEntry } },
+    /app names must be non-empty/,
+  ]),
+  ...['todo', '/todo', '#todo', '#/', 42].map((route): [string, unknown, RegExp] => [
+    `the route ${JSON.stringify(route)} (not #/<name>)`,
+    withTodo({ route }),
+    /apps\.todo\.route must start with "#\/", name a route and contain no whitespace/,
+  ]),
+  ...['#/to do', '#/todo ', '#/\ttodo', '#/todo\n'].map((route): [string, unknown, RegExp] => [
+    `the route ${JSON.stringify(route)} (contains whitespace)`,
+    withTodo({ route }),
+    /apps\.todo\.route .*whitespace/,
+  ]),
+  ...['', '   ', undefined].map((url): [string, unknown, RegExp] => [
+    `the URL ${JSON.stringify(url)} (empty)`,
+    withTodo({ url }),
+    /apps\.todo\.url must be a non-empty string/,
+  ]),
+])('Given a manifest with %s', (_label, manifest, offending) => {
+  describe('when load() runs', () => {
+    let event: HostEvent;
+    beforeEach(async () => {
+      ({ event } = await load(recordingFetch(json(manifest))));
+    });
+
+    it('then configFailed names the offending field [CF-04]', () => {
+      expect(failure(event)).toMatch(offending);
+    });
+  });
+});
+
+describe('Given fetch rejects with a value that is not an Error', () => {
+  describe('when load() runs', () => {
+    let event: HostEvent;
+    beforeEach(async () => {
+      ({ event } = await load(rejectingFetch('socket closed')));
+    });
+
+    it('then configFailed carries an Error whose message is that value [CF-05]', () => {
+      expect(event.type).toBe('configFailed');
+      const error = event.type === 'configFailed' ? event.error : undefined;
+      expect(error).toBeInstanceOf(Error);
+      expect(error?.message).toBe('socket closed');
+    });
   });
 });

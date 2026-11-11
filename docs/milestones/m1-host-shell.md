@@ -140,12 +140,14 @@ sequenceDiagram
   participant M as HostMediator
   participant ML as ModuleLoader
   participant O as Outlet
+  participant H as Header
   participant Rem as Remote (5175)
   participant El as todo-app
 
   U->>R: click "Todo" (hash = #/todo)
   R-->>M: routeChanged("#/todo", todo)
   Note over M: home → loadingApp(id=1)
+  M->>H: setActive(todo)
   M->>O: showLoading(todo)
   M->>ML: load(todo, 1)
   ML->>Rem: import(url)
@@ -159,6 +161,7 @@ sequenceDiagram
   U->>R: click "Weather"
   R-->>M: routeChanged("#/weather", weather)
   Note over M: appActive → loadingApp(id=2)
+  M->>H: setActive(weather)
   M->>O: showLoading(weather)
   O->>El: remove (disconnectedCallback)
   M->>ML: load(weather, 2)
@@ -230,11 +233,13 @@ Applies [03.testing.md](../specs/03.testing.md) with no deviations. The `OBS-*` 
 | BT-02 | `booting` without config | `configLoaded` | config stored, `header.render` then `router.start` |
 | BT-03 | `booting` | `configFailed("HTTP 404")` | `fatalError`, global retryable error panel, error logged |
 | BT-04 | `fatalError` | global Retry | `booting` with config cleared, `config.load` |
-| BT-05 | `booting` with config already loaded | a second `configLoaded` | ignored with a warning |
+| BT-05 | any state other than `booting` without config (config already loaded, `fatalError`, a routed state) | `configLoaded` or `configFailed` | ignored with a warning |
 | BT-06 | the mediator has already started | `start()` again | warning, no commands |
 | CF-01 | a manifest with two valid apps | `ConfigLoader.load()` | `configLoaded` with URLs resolved against the manifest URL |
 | CF-02 | the server answers 404 / invalid JSON / network error | `load()` | `configFailed` with a message that names the cause |
 | CF-03 | a manifest with a duplicate route, duplicate tag, reserved tag, tag without a hyphen, or a non-http URL | `load()` | `configFailed` naming the offending `apps.<name>` field (one scenario per rule) |
+| CF-04 | a manifest with no `apps` object, a non-object entry, an empty app name, a route that is not `#/<name>` or contains whitespace, or an empty URL | `load()` | `configFailed` naming the offending field (one scenario per rule) |
+| CF-05 | `fetch` rejects with a value that is not an `Error` | `load()` | `configFailed` with an `Error` whose message is that value |
 
 #### Routing
 
@@ -246,6 +251,11 @@ Applies [03.testing.md](../specs/03.testing.md) with no deviations. The `OBS-*` 
 | TR-04 | `fatalError` or no config | `routeChanged` | ignored with a warning |
 | RT-01 | the hash is `#/todo` | `router.start(apps)` | `routeChanged("#/todo", todo)` is reported right away |
 | RT-02 | the router has started | the hash changes | exactly one `routeChanged` per change |
+| RT-03 | the hash is empty or `#` | the router reports the route | the path is `#/` |
+| RT-04 | the router has started | `router.navigate(path)` | `location.hash` is set and the change is reported as `routeChanged` |
+| RT-05 | the router has been stopped | the hash changes | no `routeChanged` |
+| HD-01 | a config with apps | `header.render(apps)` | a home link and one plain `<a href="<route>">` per app, replacing earlier content |
+| HD-02 | the header is rendered | `header.setActive(entry)` / `setActive(null)` | only that app's link has `aria-current="page"` / no link has it |
 
 #### Loading, mounting, failure
 
@@ -254,7 +264,7 @@ Applies [03.testing.md](../specs/03.testing.md) with no deviations. The `OBS-*` 
 | TR-05 | `loadingApp(id=n)` | `appLoaded(n)` | `appActive`, `outlet.mount(entry)` |
 | TR-06 | `loadingApp(id=n)` | `appFailed(n)` | `appError`, route retryable error naming the app, error logged |
 | TR-07 | `appError` | route Retry | `loadingApp(id=n+1)`, `loader.load(retry=true)`, header not updated again |
-| TR-08 | any state other than `appError` / `fatalError` | Retry | ignored with a warning |
+| TR-08 | any state other than `appError` / `fatalError`, or an error state whose scope does not match the Retry (global Retry in `appError`, route Retry in `fatalError`) | Retry | ignored with a warning |
 | TR-09 | `loadingApp(id=2)` | `appLoaded(1)` or `appFailed(1)` | state unchanged, stale warning, nothing mounted |
 | ML-01 | the tag is already defined | `load()` | `appLoaded` without calling the importer |
 | ML-02 | the importer resolves and the tag gets defined | `load()` | `appLoaded` with the same activation id |
@@ -266,6 +276,15 @@ Applies [03.testing.md](../specs/03.testing.md) with no deviations. The `OBS-*` 
 | OU-02 | an error panel with Retry is shown | the user clicks Retry | `retryRequested(scope)` is sent |
 | MD-01 | a colleague throws while running a command | the mediator runs it | `command failed` is logged, the other commands still run |
 | MD-02 | a command synchronously triggers a notification | the mediator is running commands | the notification is processed only after the current event finishes (run-to-completion) |
+| ML-07 | the module loads but never defines its tag | the timeout elapses (fake timers) | `appFailed` with "timed out after … ms" |
+| OU-03 | an outlet | `showHome(apps)` | one link per app |
+| OU-04 | an outlet | `showLoading(entry)` | a busy panel naming the app |
+| OU-05 | an outlet | `showError(scope, message, retryable=false)` | the message is rendered as text (never HTML) and there is no Retry button |
+| OU-06 | an outlet | `showNotFound(path)` | the path and a link home |
+| MD-03 | the mediator has not started | a notification arrives | ignored with a warning |
+| MD-04 | processing an event throws | more events are queued behind it | `event processing failed` is logged and the queued events are still processed |
+| MD-05 | a started mediator with recording colleagues | boot, open an app, switch apps, the app fails, Retry | colleagues receive commands in the order of the §2.5 sequences |
+| TR-10 | any state | any event, including an unknown event type | `transition` never throws; an unknown type is ignored with a warning |
 
 #### Navigation requests
 
@@ -273,11 +292,23 @@ Applies [03.testing.md](../specs/03.testing.md) with no deviations. The `OBS-*` 
 |---|---|---|---|
 | NV-01 | config loaded | `navigateRequested("#/weather")` (declared route) or `"#/"` | `router.navigate(path)` |
 | NV-02 | config loaded | `navigateRequested("#/unknown")` | warning `navigate request rejected`, state unchanged |
-| NV-03 | no config yet | `navigateRequested` | ignored with a warning |
+| NV-03 | no config (before `configLoaded`, or `fatalError`) | `navigateRequested` | ignored with a warning |
 | NV-04 | the host is wired | `mf:navigate` with no string `detail.path` | warning `malformed mf:navigate ignored`, no notification |
 | E2E-01 | `wire()` with two fake remotes | the user clicks Todo, then Weather | each element is defined once and only one is mounted at a time |
-| E2E-02 | the weather import fails | the user opens Weather, then Todo | Weather shows a route error panel; Todo mounts; the header keeps working |
+| E2E-02 | one remote's import fails | the user opens that app, then Todo | the failing app shows a route error panel; Todo mounts; the header keeps working |
+| E2E-03 | `wire()` | `start()` | the manifest is fetched from `host.config.json` next to the document; home view and header links are shown |
+| E2E-04 | the host is wired | an app dispatches `mf:navigate` to a declared route | that app is mounted and highlighted |
+| E2E-05 | the host is wired | the hash names no app | the not-found view is shown and the header stays |
+| E2E-06 | a remote was down and is back | the user clicks Retry | the module is imported again with `mf-retry` and the app mounts |
+
+#### Contract and support
+
+| Id | Given | When | Then |
+|---|---|---|---|
+| CT-01 | a page | `requestNavigate(path)` | `mf:navigate` is dispatched on `window` with `detail.path`, `bubbles: true` and `composed: true` |
+| CT-02 | an explicit target | `requestNavigate(path, target)` | the event is dispatched on that target |
+| LG-01 | a logger for a component | `info` / `warn` / `error` with fields | one JSON line per call on the matching console method, with `ts`, `level`, `component`, `msg` and the fields; an `Error` field is written as `{ name, message }` |
 
 ### 3.3 Migrating the existing tests
 
-The current suites use transition-style names (e.g. `configLoaded → booting / …`). Restructure them to match the catalogue above. Scope of the definition of done: `@mf/host` and `@mf/shared-contracts`.
+The current suites use transition-style names (e.g. `configLoaded → booting / …`). Restructure them to match the catalogue above, using the builders and boundary fakes in `packages/host/test/support/`. Scope of the definition of done: `@mf/host` and `@mf/shared-contracts`.

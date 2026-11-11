@@ -1,81 +1,127 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { Outlet } from '../src/outlet';
-import type { AppEntry, Notify } from '../src/types';
+import type { AppEntry } from '../src/types';
+import { anApp } from './support/builders';
+import { recordingNotify } from './support/fakes';
 
-const todo: AppEntry = { name: 'todo', route: '#/todo', url: 'http://x/todo.js', tag: 'outlet-todo' };
-const weather: AppEntry = { name: 'weather', route: '#/weather', url: 'http://x/w.js', tag: 'outlet-weather' };
+const todo = anApp('todo');
+const weather = anApp('weather');
 
-describe('Outlet', () => {
+/** `[href, text]` of every link inside the outlet. */
+const links = (el: HTMLElement): Array<[string | null, string | null]> =>
+  [...el.querySelectorAll('a')].map((a) => [a.getAttribute('href'), a.textContent]);
+
+/** Elements in the outlet whose tag is one of the apps' tags. */
+const appElements = (el: HTMLElement, ...apps: AppEntry[]): Element[] =>
+  [...el.querySelectorAll(apps.map((a) => a.tag).join(','))];
+
+describe('Given an outlet', () => {
   let el: HTMLElement;
-  let notify: ReturnType<typeof vi.fn<Notify>>;
+  let rec: ReturnType<typeof recordingNotify>;
   let outlet: Outlet;
 
   beforeEach(() => {
     el = document.createElement('main');
-    notify = vi.fn<Notify>();
-    outlet = new Outlet({ element: el, notify });
+    rec = recordingNotify();
+    outlet = new Outlet({ element: el, notify: rec.notify });
   });
 
-  it('showHome lists a link per app', () => {
-    outlet.showHome([todo, weather]);
-    const links = [...el.querySelectorAll('a')].map((a) => [a.getAttribute('href'), a.textContent]);
-    expect(links).toEqual([
-      ['#/todo', 'Todo'],
-      ['#/weather', 'Weather'],
-    ]);
+  describe('and an app is mounted', () => {
+    let mounted: Element;
+    beforeEach(() => {
+      outlet.mount(todo);
+      mounted = el.firstElementChild!;
+    });
+
+    it('then the outlet holds that app element only [OU-01]', () => {
+      expect(mounted.localName).toBe(todo.tag);
+      expect(el.children).toHaveLength(1);
+    });
+
+    describe.each<[string, (o: Outlet) => void]>([
+      ['showLoading', (o) => o.showLoading(weather)],
+      ['showHome', (o) => o.showHome([todo, weather])],
+      ['showError', (o) => o.showError('route', 'down', true)],
+      ['showNotFound', (o) => o.showNotFound('#/nope')],
+    ])('when %s', (_name, act) => {
+      beforeEach(() => act(outlet));
+
+      it('then the previous element is removed and no app element remains [OU-01]', () => {
+        expect(mounted.isConnected).toBe(false);
+        expect(appElements(el, todo, weather)).toEqual([]);
+        expect(el.children).toHaveLength(1);
+      });
+    });
+
+    describe('when mount(other)', () => {
+      beforeEach(() => outlet.mount(weather));
+
+      it('then the previous element is removed and only the other app is in the outlet [OU-01]', () => {
+        expect(mounted.isConnected).toBe(false);
+        expect(appElements(el, todo, weather).map((e) => e.localName)).toEqual([weather.tag]);
+      });
+    });
   });
 
-  it('showLoading names the app and marks the panel busy', () => {
-    outlet.showLoading(todo);
-    expect(el.textContent).toContain('Loading Todo');
-    expect(el.querySelector('[aria-busy="true"]')).not.toBeNull();
+  describe.each(['route', 'global'] as const)('and a %s error panel with Retry is shown', (scope) => {
+    beforeEach(() => outlet.showError(scope, 'Could not load todo: down', true));
+
+    it('then the panel is an alert for that scope with the message and a Retry button [OU-02]', () => {
+      const panel = el.querySelector<HTMLElement>('[role="alert"]')!;
+      expect(panel.dataset.scope).toBe(scope);
+      expect(panel.textContent).toContain('Could not load todo: down');
+      expect(el.querySelector('button')?.textContent).toBe('Retry');
+    });
+
+    describe('when the user clicks Retry', () => {
+      beforeEach(() => el.querySelector('button')!.click());
+
+      it(`then retryRequested(${scope}) is sent [OU-02]`, () => {
+        expect(rec.events).toEqual([{ type: 'retryRequested', scope }]);
+      });
+    });
   });
 
-  it.each(['route', 'global'] as const)('showError(%s) renders the message and a Retry that notifies', (scope) => {
-    outlet.showError(scope, 'Could not load todo: down', true);
-    const panel = el.querySelector('[role="alert"]') as HTMLElement;
-    expect(panel.dataset.scope).toBe(scope);
-    expect(panel.textContent).toContain('Could not load todo: down');
-    const button = el.querySelector('button')!;
-    expect(button.textContent).toBe('Retry');
-    button.click();
-    expect(notify).toHaveBeenCalledWith({ type: 'retryRequested', scope });
+  describe('when showHome(apps)', () => {
+    beforeEach(() => outlet.showHome([todo, weather]));
+
+    it('then there is one link per app [OU-03]', () => {
+      expect(links(el)).toEqual([
+        ['#/todo', 'Todo'],
+        ['#/weather', 'Weather'],
+      ]);
+    });
   });
 
-  it('showError without retry has no button', () => {
-    outlet.showError('route', 'nope', false);
-    expect(el.querySelector('button')).toBeNull();
+  describe('when showLoading(todo)', () => {
+    beforeEach(() => outlet.showLoading(todo));
+
+    it('then a busy panel names the app [OU-04]', () => {
+      const panel = el.querySelector('[aria-busy="true"]');
+      expect(panel?.textContent).toContain('Loading Todo');
+    });
   });
 
-  it('renders error messages as text, not HTML', () => {
-    outlet.showError('route', '<img src=x onerror=alert(1)>', true);
-    expect(el.querySelector('img')).toBeNull();
+  describe('when showError(scope, message, retryable=false) with HTML in the message', () => {
+    const message = '<img src=x onerror=alert(1)>';
+    beforeEach(() => outlet.showError('route', message, false));
+
+    it('then the message is rendered as text, never HTML [OU-05]', () => {
+      expect(el.querySelector('img')).toBeNull();
+      expect(el.querySelector('[role="alert"]')?.textContent).toContain(message);
+    });
+
+    it('then there is no Retry button [OU-05]', () => {
+      expect(el.querySelector('button')).toBeNull();
+    });
   });
 
-  it('showNotFound shows the path and a link home', () => {
-    outlet.showNotFound('#/nope');
-    expect(el.textContent).toContain('#/nope');
-    expect(el.querySelector('a')?.getAttribute('href')).toBe('#/');
-  });
+  describe('when showNotFound("#/nope")', () => {
+    beforeEach(() => outlet.showNotFound('#/nope'));
 
-  it('mount creates the element and replaces the previous one', () => {
-    outlet.mount(todo);
-    const first = el.querySelector('outlet-todo');
-    expect(first).not.toBeNull();
-    outlet.mount(weather);
-    expect(el.children).toHaveLength(1);
-    expect(el.querySelector('outlet-weather')).not.toBeNull();
-    expect(first!.isConnected).toBe(false);
-  });
-
-  it('any show* removes the mounted element (disconnecting it)', () => {
-    outlet.mount(todo);
-    const mounted = el.firstElementChild!;
-    outlet.showLoading(weather);
-    expect(mounted.isConnected).toBe(false);
-    expect(el.children).toHaveLength(1);
-    outlet.showError('route', 'x', true);
-    expect(el.children).toHaveLength(1);
-    expect(el.querySelector('.mf-panel--loading')).toBeNull();
+    it('then the path and a link home are shown [OU-06]', () => {
+      expect(el.textContent).toContain('#/nope');
+      expect(links(el)).toEqual([['#/', 'Go home']]);
+    });
   });
 });
