@@ -1,0 +1,6 @@
+{
+  "apps": {
+    "todo": { "route": "#/todo", "url": "http://localhost:5175/src/todo-app.ts", "tag": "todo-app" },
+    "weather": { "route": "#/weather", "url": "http://localhost:5176/src/weather-app.ts", "tag": "weather-dashboard" }
+  }
+}

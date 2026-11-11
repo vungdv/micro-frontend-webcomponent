@@ -4,7 +4,7 @@ This folder breaks down the milestones in [01.init-spec.md](../specs/01.init-spe
 
 | # | Milestone | Detail design | Depends on | Status |
 |---|---|---|---|---|
-| M1 | Host shell, manifest, routing, placeholder apps | [m1-host-shell.md](m1-host-shell.md) | none | Designed |
+| M1 | Host shell, manifest, routing, placeholder apps | [m1-host-shell.md](m1-host-shell.md) | none | Implemented |
 | M2 | Shared auth (Auth0, UserContext, route guard) | not written yet | M1 | Planned |
 | M3 | Todo app (Vue 3) | not written yet | M2 | Planned |
 | M4 | Weather dashboard (Lit) | not written yet | M2 | Planned |

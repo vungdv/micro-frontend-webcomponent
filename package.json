@@ -1,0 +1,21 @@
+{
+  "name": "micro-frontend",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n host,todo,weather -c blue,green,yellow \"npm run dev -w @mf/host\" \"npm run dev -w @mf/todo-app\" \"npm run dev -w @mf/weather-app\"",
+    "build": "npm run build --workspaces --if-present",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.5",
+    "happy-dom": "^21.0.4",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  }
+}

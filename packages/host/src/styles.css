@@ -1,0 +1,10 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; color: #1f2933; background: #f7f9fb; }
+#mf-header { display: flex; align-items: center; gap: 2rem; padding: 0.75rem 1.5rem; background: #1f2933; }
+#mf-header a { color: #e4e7eb; text-decoration: none; }
+#mf-header nav { display: flex; gap: 1rem; }
+#mf-header a[aria-current='page'] { color: #fff; font-weight: 600; border-bottom: 2px solid #3ebd93; }
+.mf-header__title { font-weight: 700; }
+#mf-outlet { display: block; padding: 1.5rem; }
+.mf-panel--error { border: 1px solid #e12d39; border-radius: 6px; padding: 1rem; background: #ffe3e3; }
+.mf-panel--loading { color: #616e7c; }
