@@ -202,3 +202,5 @@ sequenceDiagram
     Note over M: log.warn, state unchanged
   end
 ```
+## 3. Testing
+See [02.testing.md](../specs/02.testing.md).
