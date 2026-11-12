@@ -1,0 +1,16 @@
+{
+  "apps": {
+    "todo": {
+      "route": "#/todo",
+      "url": "./remotes/todo/todo-app.js",
+      "tag": "todo-app",
+      "attributes": { "weather-route": "#/weather" }
+    },
+    "weather": {
+      "route": "#/weather",
+      "url": "./remotes/weather/weather-app.js",
+      "tag": "weather-dashboard",
+      "attributes": { "units": "metric" }
+    }
+  }
+}

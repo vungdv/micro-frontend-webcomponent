@@ -4,18 +4,18 @@ Parent spec: [01.init-spec.md](../specs/01.init-spec.md). Milestone index: [READ
 
 ## 1. Goal
 
-Build the host (shell) and prove that it can compose independently built micro-frontends at runtime, before any real app or auth exists.
+Build the host (shell) and prove that it can compose independently built micro-frontends at runtime, before any real app exists.
 
 At the end of M1, the host must:
 
-1. **Boot from a manifest.** Fetch and validate `host.config.json`. The manifest is the only thing the host knows about each app (`route`, `url`, `tag`).
+1. **Boot from a manifest.** Fetch and validate `host.config.json`. The manifest is the only thing the host knows about each app (`route`, `url`, `tag`, optional `attributes`).
 2. **Route by hash.** Map `#/<name>` to a manifest entry. `#/` is the host's home view; an unknown route shows a not-found view.
 3. **Load an app on first visit only.** Later visits reuse the already registered element.
-4. **Mount exactly one app at a time.** Create the custom element in the outlet, and remove the previous one on route change.
+4. **Mount exactly one app at a time.** Create the custom element in the outlet with the manifest entry's attributes set before `append`, and remove the previous one on route change.
 5. **Contain failures.** A remote that is down, slow, or broken affects only its own route: an error panel with Retry replaces it, and the header and other routes keep working.
 6. **Accept navigation requests from apps.** An app asks to navigate with the `mf:navigate` event; the host decides whether to act on it.
 
-Out of scope for M1: auth (M2), Vue and Lit apps (M3, M4), production layout and deployment (M5), theming (M6). The remotes in M1 are vanilla placeholder elements.
+Out of scope for M1: Vue and Lit apps (M2, M3), production layout and deployment (M4), theming (M5). The remotes in M1 are vanilla placeholder elements. They already follow the [micro-frontend anatomy](../specs/01.init-spec.md#micro-frontend-anatomy) (`web-component.ts`, standalone harness, `custom-elements.json`), so M2 and M3 only replace their internals. They also exercise the contract the real apps will use: the weather placeholder renders its `units` attribute, and the todo placeholder renders a link built from its `weather-route` attribute that dispatches `mf:navigate`.
 
 ## 2. Architecture
 
@@ -29,7 +29,7 @@ With the Mediator pattern, one object, the `HostMediator`, owns every cross-comp
 
 ```mermaid
 flowchart LR
-  subgraph Host["Host (packages/host)"]
+  subgraph Host["Host (apps/shell)"]
     direction LR
     M["HostMediator<br/>(state + transition)"]
     CL[ConfigLoader]
@@ -57,7 +57,7 @@ flowchart LR
 | Role | Component | Does | Never does |
 |---|---|---|---|
 | Mediator | `HostMediator` | Holds the host state, decides the next step, sends commands to colleagues | Touch the DOM, fetch, import |
-| Colleague | `ConfigLoader` | Fetches and validates the manifest | Decide what happens after a failure |
+| Colleague | `ConfigLoader` | Fetches and validates the manifest; resolves each relative `url` against the manifest URL | Decide what happens after a failure |
 | Colleague | `Router` | Listens to `hashchange`, resolves the hash to a manifest entry, sets `location.hash` on request | Load or mount anything |
 | Colleague | `ModuleLoader` | `import(url)` + `whenDefined(tag)`, with timeouts and retry; skips the import if `customElements.get(tag)` is already defined | Touch the DOM |
 | Colleague | `Outlet` | Owns `#mf-outlet`: shows home, loading, error, not-found, or mounts an element | Decide what to show |
@@ -68,8 +68,8 @@ flowchart LR
 
 1. **Colleagues → mediator: notifications only.** Each colleague gets a `notify(event)` callback in its constructor and reports facts (`configLoaded`, `configFailed`, `routeChanged`, `appLoaded`, `appFailed`, `retryRequested`).
 2. **Mediator → colleagues: commands only.** The mediator calls colleague methods (`load()`, `navigate()`, `mount()`, ...). Commands never return decisions to the mediator; results come back later as notifications.
-3. **No colleague imports another colleague.** Dependencies point one way: `main.ts` wires colleagues to the mediator.
-4. **Remotes talk to the host only through the contract** (`@mf/shared-contracts`): attributes in, `mf:navigate` out. One window listener in `main.ts` turns `mf:navigate` into a `navigateRequested` notification.
+3. **No colleague imports another colleague.** Dependencies point one way: `app/create-host.ts` wires colleagues to the mediator; `main.ts` is only the entry that calls `createHost(...).start()`.
+4. **Remotes talk to the host only through the contract** (`@mf/contracts`): attributes in, `mf:navigate` out. Remotes dispatch it on their own element (`bubbles`, `composed`). One window listener in `app/create-host.ts` turns `mf:navigate` into a `navigateRequested` notification.
 5. **The decision logic is a pure function.** `transition(state, event) → { state, commands }` has no DOM and no I/O, so every rule can be unit-tested. `HostMediator` only stores the state, calls `transition`, and runs the returned commands.
 
 ### 2.4 Behaviour: host state machine
@@ -101,7 +101,10 @@ Key behaviours:
 - **Routing is the same from every state.** Once the config is loaded, `routeChanged` selects the next state from the hash alone: `#/` → `home`, a declared route → `loadingApp`, anything else → `notFound`. This includes the first route, which the router reports as soon as it starts.
 - **Activation id.** Each entry into `loadingApp` gets a new id. An `appLoaded` / `appFailed` whose id is not the current one is stale (the user already navigated away) and is ignored with a warning.
 - **`fatalError` is only for a broken manifest.** A broken remote leads to `appError` (goal 5).
-- **M2 extension point.** Auth adds states (`loadingAuth`, `unauthenticated`, `authError`) between `booting` and the route states. Colleagues and the transition shape stay the same.
+
+Known gaps:
+
+- **A remote that throws while mounting is not detected.** If its constructor or `connectedCallback` throws, the browser reports an uncaught error and the element is still appended; the state stays `appActive`. A future `mountFailed` notification from the `Outlet` could route it to `appError`.
 
 ### 2.5 Behaviour: collaboration sequences
 
@@ -150,7 +153,7 @@ sequenceDiagram
   ML-->>M: appLoaded(todo, 1)
   Note over M: loadingApp → appActive
   M->>O: mount(todo)
-  O->>El: createElement + setAttribute + append
+  O->>El: createElement + setAttribute(entry.attributes) + append
   El->>El: connectedCallback
 
   U->>R: click "Weather"
@@ -188,7 +191,7 @@ sequenceDiagram
 sequenceDiagram
   autonumber
   participant El as todo-app
-  participant Main as main.ts (window listener)
+  participant Main as create-host.ts (window listener)
   participant M as HostMediator
   participant R as Router
 
@@ -202,3 +205,5 @@ sequenceDiagram
     Note over M: log.warn, state unchanged
   end
 ```
+## 3. Testing
+See [02.testing.md](../specs/02.testing.md).

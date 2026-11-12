@@ -1,0 +1,16 @@
+{
+  "apps": {
+    "todo": {
+      "route": "#/todo",
+      "url": "http://localhost:5175/src/web-component.ts",
+      "tag": "todo-app",
+      "attributes": { "weather-route": "#/weather" }
+    },
+    "weather": {
+      "route": "#/weather",
+      "url": "http://localhost:5176/src/web-component.ts",
+      "tag": "weather-dashboard",
+      "attributes": { "units": "metric" }
+    }
+  }
+}

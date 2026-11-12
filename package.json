@@ -1,0 +1,12 @@
+{
+  "name": "micro-frontend",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.9",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "build": "pnpm -r build"
+  }
+}

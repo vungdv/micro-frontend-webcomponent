@@ -1,0 +1,45 @@
+:root {
+  --mf-color-primary: #3355cc;
+  --mf-color-error: #b42318;
+  --mf-font-family: system-ui, sans-serif;
+  font-family: var(--mf-font-family);
+}
+
+body {
+  margin: 0;
+}
+
+.mf-header {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #ddd;
+}
+
+.mf-brand {
+  font-weight: 600;
+}
+
+#mf-nav {
+  display: flex;
+  gap: 1rem;
+}
+
+#mf-nav a {
+  color: var(--mf-color-primary);
+  text-decoration: none;
+}
+
+#mf-nav a[aria-current='page'] {
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+#mf-outlet {
+  padding: 1rem;
+}
+
+.mf-error {
+  color: var(--mf-color-error);
+}
