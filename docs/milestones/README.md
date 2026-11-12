@@ -10,6 +10,7 @@ This folder breaks down the milestones in [01.init-spec.md](../specs/01.init-spe
 | M4 | Build and deploy to GitHub Pages | not written yet | M1 | Planned |
 | M5 | Polish: theming, error states, README | not written yet | M2, M3 | Planned |
 | M6 | Timezone app (Vue 3) | [03.timezone-spec.md](../specs/03.timezone-spec.md) | M1 | Designed |
+| M7 | Home layout (configurable grid on `#/`) | [04.home-layout-spec.md](../specs/04.home-layout-spec.md) | M1 | Designed |
 
 ## Scope summary
 
@@ -34,4 +35,8 @@ Theming through `--mf-*` custom properties, consistent error and empty states, a
 
 ### M6: Timezone app
 Adds a third remote, `<timezone-app>` (Vue 3), from the [feature spec](../specs/03.timezone-spec.md): IANA zones plus local time ranges, shown as a range × zone table for a chosen reference date, stored under `timezone:settings`. It is added through a manifest entry and a `TAGS` constant only, with no shell code change.
+**Exit:** the exit criteria of the feature spec pass.
+
+### M7: Home layout
+Replaces the shell's home link list with a `columns × rows` grid (each 0–10) from the [feature spec](../specs/04.home-layout-spec.md). Each cell mounts one app from the manifest, or nothing, and loads and fails on its own. View and config modes; stored under `home:layout`. Shell-only change: no remote, contract or manifest change.
 **Exit:** the exit criteria of the feature spec pass.

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppEntry } from '@mf/contracts';
-import { ModuleLoader, withRetryQuery } from './loader.ts';
+import { defineApp, ModuleLoader, RetryCounter, withRetryQuery } from './loader.ts';
+import type { ElementRegistry } from './loader.ts';
 import type { HostEvent } from '../app/mediator/types.ts';
 
 let seq = 0;
@@ -117,6 +118,32 @@ describe('ModuleLoader', () => {
   });
 });
 
+describe('RetryCounter', () => {
+  it('given a url, when next() is called repeatedly, then it returns 1, 2, 3 for that url and starts at 1 for another [HD-06]', () => {
+    const retries = new RetryCounter();
+    expect([retries.next('http://a/a.js'), retries.next('http://a/a.js'), retries.next('http://b/b.js'), retries.next('http://a/a.js')])
+      .toEqual([1, 2, 1, 3]);
+  });
+
+  it('given a counter shared with a ModuleLoader, when another caller retries the same url after the loader, then the attempt numbers do not repeat [HD-06]', async () => {
+    vi.useFakeTimers();
+    const e = entry();
+    const urls: string[] = [];
+    const retries = new RetryCounter();
+    const loader = new ModuleLoader(() => {}, {
+      importer: async (url) => {
+        urls.push(url);
+        throw new Error('down');
+      },
+      retries,
+    });
+    await loader.load('a', e, 1, true);
+    expect(retries.next(e.url)).toBe(2);
+    expect(urls).toEqual([`${e.url}?retry=1`]);
+    vi.useRealTimers();
+  });
+});
+
 describe('withRetryQuery', () => {
   it.each([
     ['./remotes/todo/todo-app.js', 1, './remotes/todo/todo-app.js?retry=1'],
@@ -126,5 +153,71 @@ describe('withRetryQuery', () => {
     ['https://x.test/repo/remotes/todo/todo-app.js', 1, 'https://x.test/repo/remotes/todo/todo-app.js?retry=1'],
   ])('given %s and attempt %i, then it returns %s [TR-25]', (url, n, expected) => {
     expect(withRetryQuery(url, n)).toBe(expected);
+  });
+});
+
+/** A fake registry: `defined` tags resolve whenDefined immediately; others never resolve. */
+function fakeRegistry(defined: string[] = []): ElementRegistry {
+  const known = new Set(defined);
+  return {
+    get: (tag: string) => (known.has(tag) ? class extends HTMLElement {} : undefined),
+    whenDefined: (tag: string) =>
+      known.has(tag) ? Promise.resolve(class extends HTMLElement {}) : new Promise(() => {}),
+  } as ElementRegistry;
+}
+
+describe('defineApp', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('given an already-defined tag, when defineApp runs, then it resolves { ok: true } without importing [HD-01]', async () => {
+    const e = entry();
+    const importer = vi.fn(async () => undefined);
+    const result = await defineApp('a', e, { importer, registry: fakeRegistry([e.tag]) });
+    expect(result).toEqual({ ok: true });
+    expect(importer).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('given an importer that rejects, when defineApp runs, then it resolves { ok: false, "could not reach <id>", cause } [HD-02]', async () => {
+    const e = entry();
+    const importer = vi.fn(async () => {
+      throw new TypeError('Failed to fetch dynamically imported module');
+    });
+    const result = await defineApp('weather', e, { importer, registry: fakeRegistry() });
+    expect(result).toEqual({
+      ok: false, message: 'could not reach weather', cause: 'Failed to fetch dynamically imported module',
+    });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('given a module that never defines the tag, when the fake timer passes timeoutMs, then it resolves { ok: false, "timed out waiting for <tag>" } [HD-03]', async () => {
+    const e = entry();
+    let settled = false;
+    const done = defineApp('slow', e, {
+      importer: async () => undefined, registry: fakeRegistry(), timeoutMs: 3_000,
+    }).then((r) => {
+      settled = true;
+      return r;
+    });
+    await vi.advanceTimersByTimeAsync(2_999);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await done).toEqual({ ok: false, message: `timed out waiting for ${e.tag}` });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('given attempt: 2, when defineApp runs, then the imported URL carries retry=2 [HD-04]', async () => {
+    const e = entry();
+    const registry = fakeRegistry();
+    const importer = vi.fn(async () => undefined);
+    const done = defineApp('a', e, { importer, registry, timeoutMs: 1_000, attempt: 2 });
+    await vi.advanceTimersByTimeAsync(1_000);
+    await done;
+    expect(importer).toHaveBeenCalledWith(`${e.url}?retry=2`);
   });
 });

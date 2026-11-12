@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AppEntry, HostConfig } from '@mf/contracts';
-import { Outlet } from './outlet.ts';
-import type { HostEvent } from '../mediator/types.ts';
+import { Outlet, type HomeViewFactory } from './outlet.ts';
+import type { Apps, HostEvent } from '../mediator/types.ts';
 
 /** Test remotes that record what they saw on connect and that they were disconnected. */
 const log: string[] = [];
@@ -24,17 +24,41 @@ const a: AppEntry = {
 const b: AppEntry = { route: '#/b', url: 'http://b/b.js', tag: 'outlet-probe-b' };
 const apps: HostConfig['apps'] = { a, b };
 
+/** Records the home views the Outlet creates, at the factory seam (HomeView has its own tests). */
+interface FakeHome { root: HTMLElement; apps: Apps; shown: number; disposed: number }
+function fakeHomeFactory() {
+  const homes: FakeHome[] = [];
+  const factory: HomeViewFactory = (root, homeApps) => {
+    const home: FakeHome = { root, apps: homeApps, shown: 0, disposed: 0 };
+    homes.push(home);
+    const cell = document.createElement('div');
+    cell.className = 'fake-home-cell';
+    root.append(cell);
+    return {
+      show: async () => void (home.shown += 1),
+      dispose: () => {
+        home.disposed += 1;
+        root.replaceChildren();
+      },
+    };
+  };
+  return { homes, factory };
+}
+
 describe('Outlet', () => {
   let root: HTMLElement;
   let events: HostEvent[];
   let outlet: Outlet;
+  let homes: FakeHome[];
 
   beforeEach(() => {
     document.body.innerHTML = '<main id="mf-outlet"></main>';
     log.length = 0;
     root = document.getElementById('mf-outlet')!;
     events = [];
-    outlet = new Outlet(root, (e) => events.push(e));
+    const home = fakeHomeFactory();
+    homes = home.homes;
+    outlet = new Outlet(root, (e) => events.push(e), home.factory);
   });
 
   it('given an entry with attributes, when mount(), then attributes are set before the element connects [TR-50]', () => {
@@ -75,10 +99,43 @@ describe('Outlet', () => {
     expect(status?.textContent).toContain('outlet-probe-b');
   });
 
-  it('given showHome(apps), then it lists a plain link per app [TR-54]', () => {
+  it('given showHome(apps), then it shows a home view inside section.mf-home instead of a link list (TR-54 updated) [TR-54]', () => {
     outlet.showHome(apps);
-    const hrefs = [...root.querySelectorAll('a')].map((x) => x.getAttribute('href'));
-    expect(hrefs).toEqual(['#/a', '#/b']);
+    const section = root.querySelector('section.mf-home');
+    expect(root.children).toHaveLength(1);
+    expect(homes).toHaveLength(1);
+    expect(homes[0]!.root).toBe(section);
+    expect(homes[0]!.apps).toBe(apps);
+    expect(homes[0]!.shown).toBe(1);
+    expect(root.querySelector('a')).toBeNull();
+  });
+
+  it('given home is shown, when showHome() runs again, then the previous home view is disposed first [HH-02]', () => {
+    outlet.showHome(apps);
+    outlet.showHome(apps);
+    expect(homes.map((h) => h.disposed)).toEqual([1, 0]);
+    expect(root.querySelectorAll('section.mf-home')).toHaveLength(1);
+  });
+
+  it.each([
+    ['showLoading', (o: Outlet) => o.showLoading(b)],
+    ['showNotFound', (o: Outlet) => o.showNotFound('#/x')],
+    ['showError', (o: Outlet) => o.showError('route', 'x', true)],
+    ['mount', (o: Outlet) => o.mount(a)],
+  ])('given home is shown, when %s(), then the home view is disposed and its content removed [HH-02]', (_name, show) => {
+    outlet.showHome(apps);
+    const cell = root.querySelector('.fake-home-cell')!;
+    show(outlet);
+    expect(homes[0]!.disposed).toBe(1);
+    expect(cell.isConnected).toBe(false);
+    expect(root.querySelector('section.mf-home')).toBeNull();
+  });
+
+  it('given home was disposed by another view, when that view is replaced, then the home view is not disposed twice [HH-02]', () => {
+    outlet.showHome(apps);
+    outlet.showLoading(b);
+    outlet.mount(a);
+    expect(homes[0]!.disposed).toBe(1);
   });
 
   it('given showNotFound(hash), then it names the unknown route and links home [TR-54]', () => {
