@@ -164,10 +164,10 @@ describe('shipped manifests', () => {
   it.each([
     ['host.config.json', devManifest],
     ['host.config.prod.json', prodManifest],
-  ])('given public/%s, then it is valid and uses the contract tags [TR-34]', (_name, manifest) => {
+  ])('given public/%s, then it is valid and uses each contract tag once [TR-34][TZH-01]', (_name, manifest) => {
     const result = validateHostConfig(manifest, MANIFEST);
     expect(result.ok).toBe(true);
     const tags = result.ok ? Object.values(result.config.apps).map((e) => e.tag) : [];
-    expect(tags).toEqual([TAGS.todo, TAGS.weather]);
+    expect([...tags].sort()).toEqual(Object.values(TAGS).sort());
   });
 });

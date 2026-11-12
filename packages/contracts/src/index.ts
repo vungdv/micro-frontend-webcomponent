@@ -11,7 +11,7 @@ export interface MfNavigateDetail {
 }
 
 /** Custom element tag names of the known micro-frontends. */
-export const TAGS = { todo: 'todo-app', weather: 'weather-dashboard' } as const;
+export const TAGS = { todo: 'todo-app', weather: 'weather-dashboard', timezone: 'timezone-app' } as const;
 
 /** One entry of the host manifest (host.config.json). */
 export interface AppEntry {

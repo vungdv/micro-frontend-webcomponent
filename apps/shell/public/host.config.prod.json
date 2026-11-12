@@ -11,6 +11,11 @@
       "url": "./remotes/weather/weather-app.js",
       "tag": "weather-dashboard",
       "attributes": { "units": "metric" }
+    },
+    "timezone": {
+      "route": "#/timezone",
+      "url": "./remotes/timezone/timezone-app.js",
+      "tag": "timezone-app"
     }
   }
 }

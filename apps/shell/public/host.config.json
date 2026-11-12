@@ -11,6 +11,11 @@
       "url": "http://localhost:5176/src/web-component.ts",
       "tag": "weather-dashboard",
       "attributes": { "units": "metric" }
+    },
+    "timezone": {
+      "route": "#/timezone",
+      "url": "http://localhost:5177/src/web-component.ts",
+      "tag": "timezone-app"
     }
   }
 }

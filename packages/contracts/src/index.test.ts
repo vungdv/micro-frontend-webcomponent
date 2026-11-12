@@ -8,7 +8,7 @@ describe('@mf/contracts', () => {
   });
 
   it('given the contract, when reading tag names, then they are valid custom element names [CT-02]', () => {
-    expect(TAGS).toEqual({ todo: 'todo-app', weather: 'weather-dashboard' });
+    expect(TAGS).toEqual({ todo: 'todo-app', weather: 'weather-dashboard', timezone: 'timezone-app' });
     for (const tag of Object.values(TAGS)) expect(tag).toMatch(/^[a-z][a-z0-9]*-[a-z0-9-]*$/);
   });
 

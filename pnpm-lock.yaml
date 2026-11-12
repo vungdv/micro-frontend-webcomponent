@@ -27,6 +27,34 @@ importers:
         specifier: ^5.1.0
         version: 5.1.0(@types/node@26.6.6)(happy-dom@21.0.4)(vite@8.3.8(@types/node@26.6.6))
 
+  apps/timezone-app:
+    dependencies:
+      '@mf/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      vue:
+        specifier: ^3.5.45
+        version: 3.5.45(typescript@7.0.2)
+    devDependencies:
+      '@custom-elements-manifest/analyzer':
+        specifier: ^0.11.0
+        version: 0.11.0
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.10
+        version: 6.0.10(vite@8.3.8(@types/node@26.6.6))(vue@3.5.45(typescript@7.0.2))
+      happy-dom:
+        specifier: ^21.0.4
+        version: 21.0.4
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8(@types/node@26.6.6)
+      vitest:
+        specifier: ^5.1.0
+        version: 5.1.0(@types/node@26.6.6)(happy-dom@21.0.4)(vite@8.3.8(@types/node@26.6.6))
+
   apps/todo-app:
     dependencies:
       '@mf/contracts':
