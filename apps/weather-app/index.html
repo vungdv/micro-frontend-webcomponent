@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>weather-dashboard harness</title>
+  </head>
+  <body>
+    <!-- Standalone harness: loads the remote entry and mounts it like the host does. -->
+    <weather-dashboard units="metric"></weather-dashboard>
+    <p>
+      <button type="button" data-units="metric">metric</button>
+      <button type="button" data-units="imperial">imperial</button>
+      <button type="button" data-units="kelvin">kelvin (invalid)</button>
+    </p>
+    <script type="module" src="/src/web-component.ts"></script>
+    <script type="module">
+      const el = document.querySelector('weather-dashboard');
+      document.querySelectorAll('button[data-units]').forEach((b) =>
+        b.addEventListener('click', () => el.setAttribute('units', b.dataset.units)),
+      );
+    </script>
+  </body>
+</html>

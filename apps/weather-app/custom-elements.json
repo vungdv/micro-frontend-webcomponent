@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "1.0.0",
+  "readme": "",
+  "modules": [
+    {
+      "kind": "javascript-module",
+      "path": "src/web-component.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "Weather dashboard micro-frontend (M1 vanilla placeholder).",
+          "name": "WeatherDashboardElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "#root",
+              "privacy": "private",
+              "type": {
+                "text": "ShadowRoot"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
+              "name": "units",
+              "type": {
+                "text": "Units"
+              },
+              "description": "Reflects the `units` attribute (normalized)."
+            },
+            {
+              "kind": "method",
+              "name": "#render",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            }
+          ],
+          "attributes": [
+            {
+              "name": "units",
+              "type": {
+                "text": "\"metric\" | \"imperial\""
+              },
+              "description": "Unit system for temperatures. Default `metric`; unknown values fall back to `metric` with a `console.warn`."
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "weather-dashboard",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "WeatherDashboardElement",
+          "declaration": {
+            "name": "WeatherDashboardElement",
+            "module": "src/web-component.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "declaration": {
+            "name": "WeatherDashboardElement",
+            "module": "src/web-component.ts"
+          }
+        }
+      ]
+    }
+  ]
+}

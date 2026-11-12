@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>todo-app harness</title>
+  </head>
+  <body>
+    <!-- Standalone harness: loads the remote entry and mounts it like the host does. -->
+    <todo-app weather-route="#/weather"></todo-app>
+    <pre id="log"></pre>
+    <script type="module" src="/src/web-component.ts"></script>
+    <script type="module">
+      // Stand-in for the host's window listener: log navigation requests instead of routing.
+      const log = document.getElementById('log');
+      window.addEventListener('mf:navigate', (event) => {
+        console.info('mf:navigate', event.detail);
+        log.textContent += `mf:navigate ${JSON.stringify(event.detail)}\n`;
+      });
+    </script>
+  </body>
+</html>

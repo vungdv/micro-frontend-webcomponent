@@ -1,0 +1,98 @@
+{
+  "schemaVersion": "1.0.0",
+  "readme": "",
+  "modules": [
+    {
+      "kind": "javascript-module",
+      "path": "src/web-component.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "Todo micro-frontend (M1 vanilla placeholder).",
+          "name": "TodoAppElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "#root",
+              "privacy": "private",
+              "type": {
+                "text": "ShadowRoot"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
+              "name": "#listening",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "field",
+              "name": "weatherRoute",
+              "type": {
+                "text": "string | null"
+              },
+              "description": "Reflects the `weather-route` attribute."
+            },
+            {
+              "kind": "method",
+              "name": "#render",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#onClick",
+              "privacy": "private",
+              "readonly": true
+            }
+          ],
+          "events": [
+            {
+              "description": "Asks the host to navigate. `detail: { path }` is the `weather-route` value. Bubbles and is composed.",
+              "name": "mf:navigate"
+            }
+          ],
+          "attributes": [
+            {
+              "name": "weather-route",
+              "type": {
+                "text": "string"
+              },
+              "description": "Host route of the weather app (e.g. `#/weather`). When set, the empty state links to it; absent means no link."
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "todo-app",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "TodoAppElement",
+          "declaration": {
+            "name": "TodoAppElement",
+            "module": "src/web-component.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "declaration": {
+            "name": "TodoAppElement",
+            "module": "src/web-component.ts"
+          }
+        }
+      ]
+    }
+  ]
+}

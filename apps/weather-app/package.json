@@ -1,0 +1,25 @@
+{
+  "name": "@mf/weather-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "customElements": "/private/tmp/claude-501/-Users-vung-do-projects-javascript-micro-frontend/82a7d1fa-bf0d-40ef-8bab-7a73b1616731/scratchpad/cem-weather-app/custom-elements.json",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "analyze": "custom-elements-manifest analyze --globs src/web-component.ts --outdir .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mf/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@custom-elements-manifest/analyzer": "^0.11.0",
+    "happy-dom": "^21.0.4",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  }
+}
