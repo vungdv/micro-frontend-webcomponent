@@ -1,0 +1,81 @@
+{
+  "schemaVersion": "1.0.0",
+  "readme": "",
+  "modules": [
+    {
+      "kind": "javascript-module",
+      "path": "src/web-component.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "Timezone micro-frontend (Vue 3). Shows the user's local time ranges in other IANA time zones.",
+          "name": "TimezoneAppElement",
+          "cssProperties": [
+            {
+              "description": "Font family of the app.",
+              "name": "--mf-font-family"
+            },
+            {
+              "description": "Accent color of buttons and focus outlines.",
+              "name": "--mf-color-primary"
+            },
+            {
+              "description": "Color of validation messages.",
+              "name": "--mf-color-error"
+            },
+            {
+              "description": "Text color.",
+              "name": "--mf-color-text"
+            },
+            {
+              "description": "Color of table and input borders.",
+              "name": "--mf-color-border"
+            }
+          ],
+          "members": [
+            {
+              "kind": "field",
+              "name": "#root",
+              "privacy": "private",
+              "type": {
+                "text": "ShadowRoot"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
+              "name": "#app",
+              "privacy": "private",
+              "type": {
+                "text": "App | null"
+              },
+              "default": "null"
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "timezone-app",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "TimezoneAppElement",
+          "declaration": {
+            "name": "TimezoneAppElement",
+            "module": "src/web-component.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "declaration": {
+            "name": "TimezoneAppElement",
+            "module": "src/web-component.ts"
+          }
+        }
+      ]
+    }
+  ]
+}

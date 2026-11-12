@@ -9,6 +9,7 @@ This folder breaks down the milestones in [01.init-spec.md](../specs/01.init-spe
 | M3 | Weather dashboard (Lit) | not written yet | M1 | Planned |
 | M4 | Build and deploy to GitHub Pages | not written yet | M1 | Planned |
 | M5 | Polish: theming, error states, README | not written yet | M2, M3 | Planned |
+| M6 | Timezone app (Vue 3) | [03.timezone-spec.md](../specs/03.timezone-spec.md) | M1 | Designed |
 
 ## Scope summary
 
@@ -30,3 +31,7 @@ A GitHub Actions workflow builds every app and assembles the single Pages layout
 
 ### M5: Polish
 Theming through `--mf-*` custom properties, consistent error and empty states, and a README with run instructions.
+
+### M6: Timezone app
+Adds a third remote, `<timezone-app>` (Vue 3), from the [feature spec](../specs/03.timezone-spec.md): IANA zones plus local time ranges, shown as a range × zone table for a chosen reference date, stored under `timezone:settings`. It is added through a manifest entry and a `TAGS` constant only, with no shell code change.
+**Exit:** the exit criteria of the feature spec pass.

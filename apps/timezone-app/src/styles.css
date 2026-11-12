@@ -1,0 +1,147 @@
+:host{display:block}:host([hidden]){display:none}
+
+/* All <timezone-app> shadow styles. Injected into the shadow root (never document.head). */
+.tz {
+  font-family: var(--mf-font-family, system-ui, sans-serif);
+  color: var(--mf-color-text, #1f2328);
+  max-width: 60rem;
+}
+
+.tz__title {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+}
+
+.tz__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.tz-zone-picker,
+.tz-range-form,
+.tz-date {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.tz-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.875rem;
+}
+
+.tz-field__input {
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  font: inherit;
+  font-size: 1rem;
+  border: 1px solid var(--mf-color-border, #d0d7de);
+  border-radius: 4px;
+  color: inherit;
+}
+
+.tz-field__input[aria-invalid='true'] {
+  border-color: var(--mf-color-error, #b42318);
+}
+
+.tz-field__input:focus-visible,
+.tz button:focus-visible,
+.tz-table-wrap:focus-visible {
+  outline: 2px solid var(--mf-color-primary, #3355cc);
+  outline-offset: 1px;
+}
+
+.tz-zone-picker .tz-field__input {
+  width: 16rem;
+}
+
+.tz button {
+  font: inherit;
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+  border: 1px solid var(--mf-color-border, #d0d7de);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+}
+
+.tz .tz-button--primary {
+  background: var(--mf-color-primary, #3355cc);
+  border-color: var(--mf-color-primary, #3355cc);
+  color: #fff;
+}
+
+.tz .tz-button--small {
+  padding: 0.1rem 0.4rem;
+  font-size: 0.75rem;
+}
+
+.tz-error {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--mf-color-error, #b42318);
+  font-size: 0.875rem;
+}
+
+.tz-range-form__hint {
+  flex-basis: 100%;
+  margin: 0;
+  min-height: 1.2em;
+  font-size: 0.875rem;
+  opacity: 0.75;
+}
+
+.tz-empty {
+  margin: 0.5rem 0;
+}
+
+/* The table scrolls inside its own container on narrow screens. */
+.tz-table-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.tz-table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.tz-table th,
+.tz-table td {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--mf-color-border, #d0d7de);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.tz-zone,
+.tz-table__range {
+  font-weight: 600;
+}
+
+.tz-zone__label,
+.tz-zone__offset,
+.tz-table__range-label,
+.tz-cell__range,
+.tz-cell__duration {
+  display: block;
+}
+
+.tz-zone__offset,
+.tz-cell__duration {
+  font-size: 0.8rem;
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+.tz-zone .tz-button--small,
+.tz-table__range .tz-button--small {
+  margin-top: 0.25rem;
+}
