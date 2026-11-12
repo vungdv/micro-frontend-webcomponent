@@ -1,12 +1,24 @@
+import { createApp, h, shallowRef, type App, type ShallowRef } from 'vue';
 import { MF_NAVIGATE, TAGS, type MfNavigateDetail } from '@mf/contracts';
-import { renderEmptyPage } from './pages/empty-page.ts';
+import TodoPage from './pages/TodoPage.vue';
+import styles from './styles.css?inline';
+
+/** Builds the contract event (kept outside the class so the manifest documents only the JSDoc `@fires`). */
+function navigateEvent(path: string): CustomEvent<MfNavigateDetail> {
+  return new CustomEvent<MfNavigateDetail>(MF_NAVIGATE, { detail: { path }, bubbles: true, composed: true });
+}
 
 /**
- * Todo micro-frontend (M1 vanilla placeholder).
+ * Todo micro-frontend (Vue 3). Mounts the todo list into its shadow root.
  *
  * @tag todo-app
  * @attr {string} weather-route - Host route of the weather app (e.g. `#/weather`). When set, the empty state links to it; absent means no link.
  * @fires mf:navigate - Asks the host to navigate. `detail: { path }` is the `weather-route` value. Bubbles and is composed.
+ * @cssprop --mf-font-family - Font family of the app.
+ * @cssprop --mf-color-primary - Accent color of buttons, links and the active filter.
+ * @cssprop --mf-color-error - Color of validation messages.
+ * @cssprop --mf-color-text - Text color.
+ * @cssprop --mf-color-border - Color of item separators.
  */
 export class TodoAppElement extends HTMLElement {
   static get observedAttributes(): string[] {
@@ -14,7 +26,8 @@ export class TodoAppElement extends HTMLElement {
   }
 
   readonly #root: ShadowRoot;
-  #listening = false;
+  #app: App | null = null;
+  #route: ShallowRef<string | null> | null = null;
 
   constructor() {
     super();
@@ -32,41 +45,38 @@ export class TodoAppElement extends HTMLElement {
   }
 
   connectedCallback(): void {
-    if (!this.#listening) {
-      this.#root.addEventListener('click', this.#onClick);
-      this.#listening = true;
-    }
-    this.#render();
+    if (this.#app) return;
+    const style = document.createElement('style');
+    style.textContent = styles;
+    const container = document.createElement('div');
+    this.#root.replaceChildren(style, container);
+
+    const route = shallowRef(this.weatherRoute);
+    const app = createApp({
+      render: () => h(TodoPage, { weatherRoute: route.value, onNavigate: () => this.#navigate(app) }),
+    });
+    this.#route = route;
+    this.#app = app;
+    app.mount(container);
   }
 
   disconnectedCallback(): void {
-    this.#root.removeEventListener('click', this.#onClick);
-    this.#listening = false;
+    this.#app?.unmount();
+    this.#app = null;
+    this.#route = null;
+    this.#root.replaceChildren();
   }
 
-  attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null): void {
-    if (name !== 'weather-route' || oldValue === newValue) return;
-    if (this.isConnected) this.#render();
+  attributeChangedCallback(name: string, _oldValue: string | null, newValue: string | null): void {
+    if (name === 'weather-route' && this.#route) this.#route.value = newValue;
   }
 
-  #render(): void {
-    renderEmptyPage(this.#root, this.weatherRoute);
-  }
-
-  readonly #onClick = (event: Event): void => {
-    const target = event.target;
-    if (!(target instanceof Element) || !target.closest('a[data-navigate]')) return;
+  /** Turns the page's `navigate` into the contract event; ignored once `app` is no longer mounted. */
+  #navigate(app: App): void {
     const path = this.weatherRoute;
-    if (path === null) return;
-    event.preventDefault();
-    this.dispatchEvent(
-      new CustomEvent<MfNavigateDetail>(MF_NAVIGATE, {
-        detail: { path },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-  };
+    if (app !== this.#app || path === null) return;
+    this.dispatchEvent(navigateEvent(path));
+  }
 }
 
 if (!customElements.get(TAGS.todo)) {
