@@ -1,0 +1,104 @@
+:host{display:block}:host([hidden]){display:none}
+
+/* All <todo-app> shadow styles. Injected into the shadow root (never document.head). */
+.todo {
+  font-family: var(--mf-font-family, system-ui, sans-serif);
+  color: var(--mf-color-text, #1f2328);
+  max-width: 40rem;
+}
+
+.todo__title {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+}
+
+.todo-input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.todo-input__field {
+  flex: 1 1 12rem;
+  min-width: 0;
+  padding: 0.4rem 0.5rem;
+  font: inherit;
+}
+
+.todo-input__error {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--mf-color-error, #b42318);
+  font-size: 0.875rem;
+}
+
+.todo button {
+  font: inherit;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+}
+
+.todo-input__submit {
+  background: var(--mf-color-primary, #3355cc);
+  border: 1px solid var(--mf-color-primary, #3355cc);
+  color: #fff;
+}
+
+.todo__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--mf-color-border, #d0d7de);
+}
+
+.todo-item__title {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.todo-item--done .todo-item__title {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.todo-item__edit {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.5rem;
+  font: inherit;
+}
+
+.todo__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.todo-filters {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.todo-filters button[aria-pressed='true'] {
+  border-color: var(--mf-color-primary, #3355cc);
+  color: var(--mf-color-primary, #3355cc);
+  font-weight: 600;
+}
+
+.todo-empty {
+  margin: 0.5rem 0;
+}
+
+.todo-empty__link {
+  color: var(--mf-color-primary, #3355cc);
+}

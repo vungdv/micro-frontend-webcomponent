@@ -8,8 +8,30 @@
       "declarations": [
         {
           "kind": "class",
-          "description": "Todo micro-frontend (M1 vanilla placeholder).",
+          "description": "Todo micro-frontend (Vue 3). Mounts the todo list into its shadow root.",
           "name": "TodoAppElement",
+          "cssProperties": [
+            {
+              "description": "Font family of the app.",
+              "name": "--mf-font-family"
+            },
+            {
+              "description": "Accent color of buttons, links and the active filter.",
+              "name": "--mf-color-primary"
+            },
+            {
+              "description": "Color of validation messages.",
+              "name": "--mf-color-error"
+            },
+            {
+              "description": "Text color.",
+              "name": "--mf-color-text"
+            },
+            {
+              "description": "Color of item separators.",
+              "name": "--mf-color-border"
+            }
+          ],
           "members": [
             {
               "kind": "field",
@@ -22,12 +44,21 @@
             },
             {
               "kind": "field",
-              "name": "#listening",
+              "name": "#app",
               "privacy": "private",
               "type": {
-                "text": "boolean"
+                "text": "App | null"
               },
-              "default": "false"
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "#route",
+              "privacy": "private",
+              "type": {
+                "text": "ShallowRef<string | null> | null"
+              },
+              "default": "null"
             },
             {
               "kind": "field",
@@ -39,19 +70,22 @@
             },
             {
               "kind": "method",
-              "name": "#render",
+              "name": "#navigate",
               "privacy": "private",
               "return": {
                 "type": {
                   "text": "void"
                 }
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#onClick",
-              "privacy": "private",
-              "readonly": true
+              },
+              "parameters": [
+                {
+                  "name": "app",
+                  "type": {
+                    "text": "App"
+                  }
+                }
+              ],
+              "description": "Turns the page's `navigate` into the contract event; ignored once `app` is no longer mounted."
             }
           ],
           "events": [

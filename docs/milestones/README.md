@@ -5,7 +5,7 @@ This folder breaks down the milestones in [01.init-spec.md](../specs/01.init-spe
 | # | Milestone | Detail design | Depends on | Status |
 |---|---|---|---|---|
 | M1 | Host shell, manifest, routing, placeholder apps | [m1-host-shell.md](m1-host-shell.md) | none | Designed |
-| M2 | Todo app (Vue 3) | not written yet | M1 | Planned |
+| M2 | Todo app (Vue 3) | [m2-todo-app.md](m2-todo-app.md) | M1 | Designed |
 | M3 | Weather dashboard (Lit) | not written yet | M1 | Planned |
 | M4 | Build and deploy to GitHub Pages | not written yet | M1 | Planned |
 | M5 | Polish: theming, error states, README | not written yet | M2, M3 | Planned |

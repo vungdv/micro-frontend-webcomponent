@@ -1,0 +1,138 @@
+{
+  "schemaVersion": "1.0.0",
+  "readme": "",
+  "modules": [
+    {
+      "kind": "javascript-module",
+      "path": "src/web-component.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "Todo micro-frontend (Vue 3). Mounts the todo list into its shadow root.",
+          "name": "TodoAppElement",
+          "cssProperties": [
+            {
+              "description": "Font family of the app.",
+              "name": "--mf-font-family"
+            },
+            {
+              "description": "Accent color of buttons, links and the active filter.",
+              "name": "--mf-color-primary"
+            },
+            {
+              "description": "Color of validation messages.",
+              "name": "--mf-color-error"
+            },
+            {
+              "description": "Text color.",
+              "name": "--mf-color-text"
+            },
+            {
+              "description": "Color of item separators.",
+              "name": "--mf-color-border"
+            }
+          ],
+          "members": [
+            {
+              "kind": "field",
+              "name": "#root",
+              "privacy": "private",
+              "type": {
+                "text": "ShadowRoot"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
+              "name": "#app",
+              "privacy": "private",
+              "type": {
+                "text": "App | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "#route",
+              "privacy": "private",
+              "type": {
+                "text": "ShallowRef<string | null> | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "weatherRoute",
+              "type": {
+                "text": "string | null"
+              },
+              "description": "Reflects the `weather-route` attribute."
+            },
+            {
+              "kind": "method",
+              "name": "#navigate",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "app",
+                  "type": {
+                    "text": "App"
+                  }
+                }
+              ],
+              "description": "Turns the page's `navigate` into the contract event; ignored once `app` is no longer mounted."
+            }
+          ],
+          "events": [
+            {
+              "name": "MF_NAVIGATE",
+              "type": {
+                "text": "CustomEvent"
+              }
+            },
+            {
+              "description": "Asks the host to navigate. `detail: { path }` is the `weather-route` value. Bubbles and is composed.",
+              "name": "mf:navigate"
+            }
+          ],
+          "attributes": [
+            {
+              "name": "weather-route",
+              "type": {
+                "text": "string"
+              },
+              "description": "Host route of the weather app (e.g. `#/weather`). When set, the empty state links to it; absent means no link."
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "todo-app",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "TodoAppElement",
+          "declaration": {
+            "name": "TodoAppElement",
+            "module": "src/web-component.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "declaration": {
+            "name": "TodoAppElement",
+            "module": "src/web-component.ts"
+          }
+        }
+      ]
+    }
+  ]
+}
