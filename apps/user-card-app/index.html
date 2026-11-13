@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>user-card harness</title>
+  </head>
+  <body>
+    <!-- Standalone harness: loads the remote entry and mounts it like the host does. -->
+    <user-card name="Ada"></user-card>
+    <p>
+      <button type="button" data-name="Ada">Ada</button>
+      <button type="button" data-name="Grace">Grace</button>
+      <button type="button" data-name="">empty (falls back to guest)</button>
+    </p>
+    <script type="module" src="/src/web-component.ts"></script>
+    <script type="module">
+      const el = document.querySelector('user-card');
+      document.querySelectorAll('button[data-name]').forEach((b) =>
+        b.addEventListener('click', () => el.setAttribute('name', b.dataset.name)),
+      );
+    </script>
+  </body>
+</html>
