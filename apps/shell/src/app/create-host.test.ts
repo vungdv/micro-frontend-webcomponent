@@ -5,8 +5,8 @@ import type { Logger } from './logger.ts';
 
 /**
  * Integration: real mediator + real colleagues on the happy-dom document.
- * Only the edges are faked: fetch (manifest), import() (remotes), the logger sink, timers, and
- * `location.hash` / `hashchange` (see fakeLocationWindow).
+ * Only the edges are faked: fetch (manifest), import() (remotes), the logger sink, timers,
+ * `location.hash` / `hashchange` (see fakeLocationWindow), and Web Storage (happy-dom's, cleared).
  */
 
 let seq = 0;
@@ -54,6 +54,11 @@ function defineRemote(tag: string): void {
 
 function fakeResponse(status: number, body: unknown): Response {
   return { ok: status >= 200 && status < 300, status, text: async () => JSON.stringify(body) } as Response;
+}
+
+/** Seeds the stored home layout (the real repository reads happy-dom's localStorage). */
+function saveLayout(cells: (string | null)[][]): void {
+  localStorage.setItem('home:layout', JSON.stringify({ version: 1, columns: cells[0]?.length ?? 0, rows: cells.length, cells }));
 }
 
 /** Settles the promise chains of fetch/import fakes (microtasks only, no timers). */
@@ -119,6 +124,7 @@ describe('host integration', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
+    localStorage.clear();
     win = fakeLocationWindow();
     document.body.innerHTML = '<header><nav id="mf-nav"></nav></header><main id="mf-outlet"></main>';
     lifecycle.length = 0;
@@ -147,20 +153,103 @@ describe('host integration', () => {
     vi.useRealTimers();
   });
 
-  it('given a valid manifest, when the host starts on an empty hash, then it renders the header and the home view [TR-70]', async () => {
+  it('given a valid manifest and empty storage, when the host starts on an empty hash, then the header renders and .mf-home mounts <todo-app> instead of a link list (TR-70 updated) [TR-70] [HH-01]', async () => {
     host.start();
     await flush();
     expect(fetchImpl).toHaveBeenCalledWith('host.config.json', expect.anything());
     expect([...nav().querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['#/', '#/todo', '#/weather']);
-    expect(outlet().querySelector('.mf-home')).not.toBeNull();
+    const home = outlet().querySelector('.mf-home');
+    expect(home?.querySelector(config.apps.todo!.tag)?.getAttribute('weather-route')).toBe('#/weather');
+    expect(home?.querySelector('a')).toBeNull();
     expect(host.mediator.state.phase).toEqual({ kind: 'home' });
+  });
+
+  it('given home with two mounted cells, when the user opens #/weather, then both cells disconnect and only the routed weather element is in the outlet [HH-02]', async () => {
+    saveLayout([[`todo`, `weather`]]);
+    host.start();
+    await flush();
+    const cells = [mounted(config.apps.todo!.tag)!, mounted(config.apps.weather!.tag)!];
+    expect(cells.every((c) => c?.isConnected)).toBe(true);
+
+    await goTo('#/weather');
+    expect(cells.map((c) => c.isConnected)).toEqual([false, false]);
+    expect(outlet().querySelector('.mf-home')).toBeNull();
+    expect(outlet().querySelectorAll(config.apps.weather!.tag)).toHaveLength(1);
+    expect(mounted(config.apps.todo!.tag)).toBeNull();
+    expect(lifecycle).toContain(`${config.apps.todo!.tag} disconnected`);
+  });
+
+  it('given a todo cell on home, when it dispatches mf:navigate to #/weather, then the host navigates there [HH-03]', async () => {
+    host.start();
+    await flush();
+    mounted(config.apps.todo!.tag)!.shadowRoot!.querySelector('button')!.click();
+    await flush();
+    expect(win.location.hash).toBe('#/weather');
+    expect(mounted(config.apps.weather!.tag)).not.toBeNull();
+  });
+
+  it('given home in config mode with an unsaved draft, when the user navigates away and back, then view mode shows the saved layout [HH-04]', async () => {
+    host.start();
+    await flush();
+    const button = (name: string) => [...outlet().querySelectorAll('button')].find((b) => b.textContent === name);
+    button('Configure')!.click();
+    const columns = outlet().querySelector<HTMLInputElement>('input[type="number"]')!;
+    columns.value = '3';
+    columns.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(outlet().querySelectorAll('select')).toHaveLength(3);
+
+    await goTo('#/todo');
+    await goTo('#/');
+    expect(outlet().querySelectorAll('select')).toHaveLength(0);
+    expect(button('Configure')).toBeDefined();
+    expect(outlet().querySelectorAll('.mf-home [role="region"]')).toHaveLength(1);
+    expect(outlet().querySelector(`.mf-home ${config.apps.todo!.tag}`)).not.toBeNull();
+    expect(localStorage.getItem('home:layout')).toBeNull();
+  });
+
+  it('given the weather remote is down, when home has a weather cell, then only that cell shows the error and logs it [HH-01]', async () => {
+    down.add(config.apps.weather!.tag);
+    saveLayout([['todo', 'weather']]);
+    host.start();
+    await flush();
+    expect(mounted(config.apps.todo!.tag)).not.toBeNull();
+    expect(outlet().querySelector('[aria-label="weather"]')?.textContent).toContain('Could not load weather');
+    expect(warn).toHaveBeenCalledWith('cell failed to load', expect.objectContaining({ appId: 'weather', row: 0, column: 1 }));
+  });
+
+  it('given the routed weather load was retried once, when a home weather cell is retried, then it uses retry=2, not the cached retry=1 [HH-06]', async () => {
+    down.add(config.apps.weather!.tag);
+    saveLayout([['weather']]);
+    host.start();
+    await flush();
+    await goTo('#/weather');
+    outlet().querySelector('button')!.click();
+    await flush();
+    expect(importer).toHaveBeenLastCalledWith(`${config.apps.weather!.url}&retry=1`);
+
+    await goTo('#/');
+    down.clear();
+    outlet().querySelector<HTMLButtonElement>('[aria-label="weather"] button')!.click();
+    await flush();
+    expect(importer).toHaveBeenLastCalledWith(`${config.apps.weather!.url}&retry=2`);
+    expect(mounted(config.apps.weather!.tag)).not.toBeNull();
+  });
+
+  it('given the host renders home, then document.head gains no <style> or <link> [HH-05]', async () => {
+    const before = document.head.querySelectorAll('style, link').length;
+    saveLayout([['todo', 'weather']]);
+    host.start();
+    await flush();
+    expect(mounted(config.apps.weather!.tag)).not.toBeNull();
+    expect(document.head.querySelectorAll('style, link')).toHaveLength(before);
   });
 
   it('given the host is on home, when the user opens todo then weather, then each is mounted with its attributes and the previous one is removed [TR-71]', async () => {
     host.start();
     await flush();
-
+    // Home now mounts a todo cell (HH-01); this scenario is about the routed mounts after it.
     await goTo('#/todo');
+    lifecycle.splice(0, lifecycle.indexOf(`${config.apps.todo!.tag} disconnected`) + 1);
     expect(importer).toHaveBeenCalledWith(config.apps.todo!.url);
     expect(mounted(config.apps.todo!.tag)).not.toBeNull();
     expect(currentLink()).toBe('#/todo');

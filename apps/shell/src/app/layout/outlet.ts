@@ -2,29 +2,36 @@ import type { AppEntry } from '@mf/contracts';
 import { HOME_ROUTE } from '../routes.ts';
 import type { Apps, ErrorScope, Notify } from '../mediator/types.ts';
 
+/** What the Outlet needs from the home view (implemented by `home/home-view.ts`). */
+export interface HomeViewHandle {
+  show(): Promise<void>;
+  dispose(): void;
+}
+
+/** Builds the home view that renders into `root` (the outlet's `section.mf-home`). */
+export type HomeViewFactory = (root: HTMLElement, apps: Apps) => HomeViewHandle;
+
 /**
  * Colleague: owns #mf-outlet. Shows exactly one view at a time (home, loading, not-found, error,
  * or one mounted app); every show replaces the previous content, removing any mounted element.
+ * Leaving home disposes the home view first, so its cells disconnect and pending loads are dropped.
  */
 export class Outlet {
   readonly #root: HTMLElement;
   readonly #notify: Notify;
+  readonly #createHome: HomeViewFactory;
+  #home: HomeViewHandle | null = null;
 
-  constructor(root: HTMLElement, notify: Notify) {
+  constructor(root: HTMLElement, notify: Notify, createHome: HomeViewFactory) {
     this.#root = root;
     this.#notify = notify;
+    this.#createHome = createHome;
   }
 
   showHome(apps: Apps): void {
-    const list = this.#el('ul');
-    for (const [id, entry] of Object.entries(apps)) {
-      const a = this.#el('a', id);
-      a.setAttribute('href', entry.route);
-      const li = this.#el('li');
-      li.append(a);
-      list.append(li);
-    }
-    this.#show('mf-home', this.#el('h1', 'Micro-frontend host'), this.#el('p', 'Pick an app:'), list);
+    const section = this.#show('mf-home');
+    this.#home = this.#createHome(section, apps);
+    void this.#home.show();
   }
 
   showLoading(entry: AppEntry): void {
@@ -55,12 +62,19 @@ export class Outlet {
   }
 
   mount(entry: AppEntry): void {
+    this.#disposeHome();
     const element = this.#root.ownerDocument.createElement(entry.tag);
     for (const [name, value] of Object.entries(entry.attributes ?? {})) element.setAttribute(name, value);
     this.#root.replaceChildren(element);
   }
 
+  #disposeHome(): void {
+    this.#home?.dispose();
+    this.#home = null;
+  }
+
   #show(className: string, ...nodes: Node[]): HTMLElement {
+    this.#disposeHome();
     const panel = this.#el('section');
     panel.className = className;
     panel.append(...nodes);

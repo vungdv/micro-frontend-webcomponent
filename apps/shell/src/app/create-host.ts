@@ -1,12 +1,14 @@
 import { MF_NAVIGATE } from '@mf/contracts';
 import { Header } from './layout/header.ts';
-import { Outlet } from './layout/outlet.ts';
+import { Outlet, type HomeViewFactory } from './layout/outlet.ts';
 import { createConsoleLogger, type Logger } from './logger.ts';
 import { HostMediator } from './mediator/host-mediator.ts';
 import type { HostEvent } from './mediator/types.ts';
 import { Router } from './router/router.ts';
 import { ConfigLoader } from '../micro-frontends/registry.ts';
-import { ModuleLoader, type Importer } from '../micro-frontends/loader.ts';
+import { defineApp, ModuleLoader, RetryCounter, type Importer } from '../micro-frontends/loader.ts';
+import { HomeView } from '../home/home-view.ts';
+import { LocalStorageLayoutRepository } from '../home/services/layout-repository.ts';
 
 export interface HostDependencies {
   window: Window;
@@ -38,13 +40,30 @@ export function createHost(deps: HostDependencies): Host {
   let mediator: HostMediator | undefined;
   const notify = (event: HostEvent) => mediator?.notify(event);
 
+  const repository = new LocalStorageLayoutRepository(logger);
+  // One counter for routed loads and home cells, so a retry never reuses a URL already tried.
+  const retries = new RetryCounter();
+  const createHome: HomeViewFactory = (root, apps) =>
+    new HomeView({
+      root,
+      apps,
+      repository,
+      define: (appId, entry, retry) =>
+        defineApp(appId, entry, {
+          importer: deps.importer,
+          timeoutMs: deps.loadTimeoutMs,
+          attempt: retry ? retries.next(entry.url) : 0,
+        }),
+      logger,
+    });
+
   const router = new Router(notify, deps.window);
   mediator = new HostMediator({
     config: new ConfigLoader(notify, { fetch: deps.fetch, url: deps.configUrl }),
     header: new Header(deps.nav),
     router,
-    loader: new ModuleLoader(notify, { importer: deps.importer, timeoutMs: deps.loadTimeoutMs }),
-    outlet: new Outlet(deps.outlet, notify),
+    loader: new ModuleLoader(notify, { importer: deps.importer, timeoutMs: deps.loadTimeoutMs, retries }),
+    outlet: new Outlet(deps.outlet, notify, createHome),
     log: logger,
   });
 
