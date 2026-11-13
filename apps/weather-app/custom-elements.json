@@ -8,33 +8,66 @@
       "declarations": [
         {
           "kind": "class",
-          "description": "Weather dashboard micro-frontend (M1 vanilla placeholder).",
+          "description": "Weather dashboard micro-frontend (Lit). Search cities, save up to 10, one forecast card per city.",
           "name": "WeatherDashboardElement",
+          "cssProperties": [
+            {
+              "description": "Font family of the app.",
+              "name": "--mf-font-family"
+            },
+            {
+              "description": "Accent color of buttons and focus rings.",
+              "name": "--mf-color-primary"
+            },
+            {
+              "description": "Color of error messages and notices.",
+              "name": "--mf-color-error"
+            },
+            {
+              "description": "Text color.",
+              "name": "--mf-color-text"
+            },
+            {
+              "description": "Color of card borders and separators.",
+              "name": "--mf-color-border"
+            },
+            {
+              "description": "Color of secondary and stale text.",
+              "name": "--mf-color-muted"
+            }
+          ],
           "members": [
             {
               "kind": "field",
-              "name": "#root",
+              "name": "#units",
               "privacy": "private",
               "type": {
-                "text": "ShadowRoot"
+                "text": "Units"
               },
-              "readonly": true
+              "default": "DEFAULT_UNITS"
+            },
+            {
+              "kind": "field",
+              "name": "#dashboard",
+              "privacy": "private",
+              "readonly": true,
+              "default": "new DashboardController(this)"
             },
             {
               "kind": "field",
               "name": "units",
               "type": {
-                "text": "Units"
+                "text": "\"metric\" | \"imperial\""
               },
-              "description": "Reflects the `units` attribute (normalized)."
+              "description": "Unit system for temperatures; reflects the `units` attribute. Unknown values are stored as `metric`.",
+              "attribute": "units"
             },
             {
               "kind": "method",
-              "name": "#render",
-              "privacy": "private",
+              "name": "render",
               "return": {
                 "type": {
-                  "text": "void"
+                  "text": "TemplateResult"
                 }
               }
             }
@@ -45,11 +78,13 @@
               "type": {
                 "text": "\"metric\" | \"imperial\""
               },
-              "description": "Unit system for temperatures. Default `metric`; unknown values fall back to `metric` with a `console.warn`."
+              "description": "Unit system for temperatures. Default `metric`; unknown values fall back to `metric` with a `console.warn`.",
+              "fieldName": "units"
             }
           ],
           "superclass": {
-            "name": "HTMLElement"
+            "name": "LitElement",
+            "package": "lit"
           },
           "tagName": "weather-dashboard",
           "customElement": true

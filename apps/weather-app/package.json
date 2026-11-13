@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "customElements": "/private/tmp/claude-501/-Users-vung-do-projects-javascript-micro-frontend/82a7d1fa-bf0d-40ef-8bab-7a73b1616731/scratchpad/cem-weather-app/custom-elements.json",
+  "customElements": "custom-elements.json",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mf/contracts": "workspace:*"
+    "@mf/contracts": "workspace:*",
+    "lit": "^3.3.3"
   },
   "devDependencies": {
     "@custom-elements-manifest/analyzer": "^0.11.0",

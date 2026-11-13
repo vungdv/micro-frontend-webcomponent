@@ -15,3 +15,15 @@ export function normalizeUnits(value: string | null): NormalizedUnits {
   if (value === 'metric' || value === 'imperial') return { units: value, valid: true };
   return { units: DEFAULT_UNITS, valid: false };
 }
+
+/** Converts degrees Celsius to degrees Fahrenheit. */
+export function celsiusToFahrenheit(celsius: number): number {
+  return (celsius * 9) / 5 + 32;
+}
+
+/** Formats a Celsius value for display in `units`, rounded to whole degrees: `"21 °C"`, `"71 °F"`. */
+export function formatTemperature(celsius: number, units: Units): string {
+  const value = units === 'imperial' ? celsiusToFahrenheit(celsius) : celsius;
+  const rounded = Math.round(value) || 0; // `|| 0` turns -0 into 0
+  return `${rounded} ${units === 'imperial' ? '°F' : '°C'}`;
+}
