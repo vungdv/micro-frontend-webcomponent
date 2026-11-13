@@ -16,6 +16,12 @@
       "route": "#/timezone",
       "url": "http://localhost:5177/src/web-component.ts",
       "tag": "timezone-app"
+    },
+    "userCard": {
+      "route": "#/user-card",
+      "url": "http://localhost:5178/src/web-component.ts",
+      "tag": "user-card",
+      "attributes": { "name": "Ben" }
     }
   }
 }

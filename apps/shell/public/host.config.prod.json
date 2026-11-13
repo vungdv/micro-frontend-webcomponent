@@ -16,6 +16,12 @@
       "route": "#/timezone",
       "url": "./remotes/timezone/timezone-app.js",
       "tag": "timezone-app"
+    },
+    "userCard": {
+      "route": "#/user-card",
+      "url": "./remotes/user-card/user-card.js",
+      "tag": "user-card",
+      "attributes": { "name": "Ben" }
     }
   }
 }
